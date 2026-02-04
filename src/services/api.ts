@@ -101,7 +101,18 @@ export async function ensureWorkspaceId(): Promise<string> {
     throw new Error('No workspaces found. Please create a workspace in Zero first.');
   }
 
-  const workspaceId = workspaces[0].id;
+  // Check for preferred workspace name from environment
+  const preferredName = process.env.ZERO_WORKSPACE_NAME;
+  let workspace = workspaces[0];
+
+  if (preferredName) {
+    const found = workspaces.find((w: { name: string }) => w.name === preferredName);
+    if (found) {
+      workspace = found;
+    }
+  }
+
+  const workspaceId = workspace.id;
   cachedWorkspaceId = workspaceId;
   return workspaceId;
 }

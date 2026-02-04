@@ -30,7 +30,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/zero-api/dist/index.js"],
       "env": {
-        "ZERO_API_KEY": "your-api-key-here"
+        "ZERO_API_KEY": "your-api-key-here",
+        "ZERO_WORKSPACE_NAME": "My Workspace"
       }
     }
   }
@@ -38,6 +39,13 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```
 
 Replace `/path/to/zero-api` with the actual path and add your Zero API key.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ZERO_API_KEY` | Yes | Your Zero API key |
+| `ZERO_WORKSPACE_NAME` | No | Workspace name to use (defaults to first workspace) |
 
 ### Getting Your Zero API Key
 

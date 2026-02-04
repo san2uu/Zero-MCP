@@ -22,7 +22,17 @@ export const workspaceTools = {
           };
         }
 
-        const workspace = workspaces[0];
+        // Check for preferred workspace name from environment
+        const preferredName = process.env.ZERO_WORKSPACE_NAME;
+        let workspace = workspaces[0];
+
+        if (preferredName) {
+          const found = workspaces.find((w: Workspace) => w.name === preferredName);
+          if (found) {
+            workspace = found;
+          }
+        }
+
         setCachedWorkspaceId(workspace.id);
 
         const markdown = `## Workspace: ${workspace.name}
