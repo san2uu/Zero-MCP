@@ -4,6 +4,7 @@ import { ListParams } from '../types.js';
 const BASE_URL = 'https://api.zero.inc';
 
 let cachedWorkspaceId: string | null = null;
+let cachedPipelineStages: Map<string, string> | null = null;
 
 export function getCachedWorkspaceId(): string | null {
   return cachedWorkspaceId;
@@ -86,6 +87,42 @@ export function formatApiError(error: unknown): string {
   }
 
   return 'An unknown error occurred';
+}
+
+export function setCachedPipelineStages(stages: Map<string, string>): void {
+  cachedPipelineStages = stages;
+}
+
+export function getCachedPipelineStages(): Map<string, string> | null {
+  return cachedPipelineStages;
+}
+
+export async function resolveStageName(stageId: string | undefined): Promise<string> {
+  if (!stageId) return 'N/A';
+
+  // Try cache first
+  if (cachedPipelineStages) {
+    return cachedPipelineStages.get(stageId) || stageId;
+  }
+
+  // Fetch and cache pipeline stages
+  try {
+    const workspaceId = await ensureWorkspaceId();
+    const client = createApiClient();
+    const params: Record<string, string> = {
+      where: JSON.stringify({ workspaceId }),
+    };
+    const response = await client.get('/api/pipelineStages', { params });
+    const stages = response.data.data || response.data;
+    const stageMap = new Map<string, string>();
+    for (const stage of stages) {
+      stageMap.set(stage.id, stage.name);
+    }
+    cachedPipelineStages = stageMap;
+    return stageMap.get(stageId) || stageId;
+  } catch {
+    return stageId;
+  }
 }
 
 export async function ensureWorkspaceId(): Promise<string> {

@@ -6,6 +6,7 @@ import { workspaceTools } from './tools/workspaces.js';
 import { companyTools } from './tools/companies.js';
 import { contactTools } from './tools/contacts.js';
 import { dealTools } from './tools/deals.js';
+import { pipelineStageTools } from './tools/pipeline-stages.js';
 
 const server = new McpServer({
   name: 'zero-crm',
@@ -90,6 +91,14 @@ server.tool(
   contactTools.zero_delete_contact.description,
   contactTools.zero_delete_contact.inputSchema.shape,
   contactTools.zero_delete_contact.handler
+);
+
+// Register pipeline stage tools
+server.tool(
+  'zero_list_pipeline_stages',
+  pipelineStageTools.zero_list_pipeline_stages.description,
+  pipelineStageTools.zero_list_pipeline_stages.inputSchema.shape,
+  pipelineStageTools.zero_list_pipeline_stages.handler
 );
 
 // Register deal tools

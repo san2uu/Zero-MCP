@@ -46,20 +46,31 @@ export interface Contact {
   archivedAt?: string;
 }
 
+export interface PipelineStage {
+  id: string;
+  workspaceId: string;
+  name: string;
+  position?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Deal {
   id: string;
   workspaceId: string;
   companyId?: string;
   company?: Company;
-  contactId?: string;
-  contact?: Contact;
+  contactIds?: string[];
   name: string;
   value?: number;
-  currency?: string;
   stage?: string;
-  probability?: number;
-  expectedCloseDate?: string;
-  description?: string;
+  confidence?: string;
+  closeDate?: string;
+  startDate?: string;
+  endDate?: string;
+  ownerIds?: string[];
+  archived?: boolean;
+  custom?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
