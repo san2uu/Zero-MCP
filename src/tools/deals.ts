@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, resolveStageName } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, resolveStageName, fetchCompaniesByIds } from '../services/api.js';
 import { Deal, ApiListResponse } from '../types.js';
 
 export const dealTools = {
   zero_list_deals: {
-    description: 'List deals in Zero CRM with optional filtering and pagination. Stages are IDs, not names — use zero_list_pipeline_stages to look up stage IDs first. Filter examples: {"stage": "<stage_id>"}, {"value": {"$gte": 50000}}, {"value": {"$between": [1000, 5000]}}, {"closeDate:month": "2026-01"}, {"stage": {"$in": ["id1", "id2"]}}, {"ownerIds": {"$includes": "userId"}}, {"companyId": {"$in": ["id1", "id2"]}}. To filter deals by company attributes (e.g., location, industry, size), first use zero_list_companies with the appropriate filter to find matching company IDs, then filter deals with {"companyId": {"$in": [...]}}. Company location data (country, city) is included in the response for reference.',
+    description: 'List deals in Zero CRM with optional filtering and pagination. Stages are IDs, not names — use zero_list_pipeline_stages to look up stage IDs first. Company location (city, country) is automatically included in the response. To filter deals by company attributes (e.g., location, industry, size), first use zero_list_companies with the appropriate filter to find matching company IDs, then filter deals with {"companyId": {"$in": [...]}}. Filter examples: {"stage": "<stage_id>"}, {"value": {"$gte": 50000}}, {"value": {"$between": [1000, 5000]}}, {"closeDate:month": "2026-01"}, {"stage": {"$in": ["id1", "id2"]}}, {"ownerIds": {"$includes": "userId"}}, {"companyId": {"$in": ["id1", "id2"]}}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"value": {"$gte": 50000}}, {"stage": {"$in": ["id1", "id2"]}}, {"closeDate:month": "2026-01"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
@@ -20,7 +20,7 @@ export const dealTools = {
 
         let fields = args.fields;
         if (args.includeRelations !== false && !fields) {
-          fields = 'id,name,value,stage,confidence,closeDate,companyId,company.id,company.name,company.country,company.city,createdAt,updatedAt';
+          fields = 'id,name,value,stage,confidence,closeDate,companyId,company.id,company.name,createdAt,updatedAt';
         }
 
         const params = buildQueryParams({
@@ -53,10 +53,20 @@ export const dealTools = {
           return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(deal.value);
         };
 
-        // Resolve stage names for all deals
-        const stageNames = await Promise.all(
-          deals.map((d) => resolveStageName(d.stage))
-        );
+        // Resolve stage names and enrich company details in parallel
+        const companyIds = deals.map((d) => d.companyId).filter(Boolean) as string[];
+        const [stageNames, companyMap] = await Promise.all([
+          Promise.all(deals.map((d) => resolveStageName(d.stage))),
+          args.includeRelations !== false ? fetchCompaniesByIds(companyIds) : Promise.resolve(new Map()),
+        ]);
+
+        const formatCompany = (deal: Deal) => {
+          const enriched = deal.companyId ? companyMap.get(deal.companyId) : undefined;
+          const name = enriched?.name || deal.company?.name;
+          if (!name) return 'N/A';
+          const location = [enriched?.city, enriched?.country].filter(Boolean).join(', ');
+          return location ? `${name} (${location})` : name;
+        };
 
         const markdown = `## Deals (${deals.length}${total ? ` of ${total}` : ''})
 
@@ -66,7 +76,7 @@ ${deals.map((d, i) => `### ${i + 1}. ${d.name}
 - **Stage:** ${stageNames[i]}
 - **Confidence:** ${d.confidence ? `${Math.round(parseFloat(d.confidence) * 100)}%` : 'N/A'}
 - **Close Date:** ${d.closeDate ? new Date(d.closeDate).toLocaleDateString() : 'N/A'}
-- **Company:** ${d.company?.name || 'N/A'}${d.company?.city || d.company?.country ? ` (${[d.company?.city, d.company?.country].filter(Boolean).join(', ')})` : ''}
+- **Company:** ${formatCompany(d)}
 `).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -103,7 +113,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         if (args.fields) {
           params.fields = args.fields;
         } else {
-          params.fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,company.id,company.name,company.country,company.city,contactIds,ownerIds,archived,createdAt,updatedAt,archivedAt';
+          params.fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,company.id,company.name,contactIds,ownerIds,archived,createdAt,updatedAt,archivedAt';
         }
 
         const response = await client.get<{ data: Deal }>(`/api/deals/${args.id}`, { params });
@@ -114,7 +124,15 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
           return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(d.value);
         };
 
-        const stageName = await resolveStageName(deal.stage);
+        // Resolve stage name and enrich company details in parallel
+        const [stageName, companyMap] = await Promise.all([
+          resolveStageName(deal.stage),
+          deal.companyId ? fetchCompaniesByIds([deal.companyId]) : Promise.resolve(new Map()),
+        ]);
+
+        const enrichedCompany = deal.companyId ? companyMap.get(deal.companyId) : undefined;
+        const companyName = enrichedCompany?.name || deal.company?.name;
+        const companyLocation = [enrichedCompany?.city, enrichedCompany?.country].filter(Boolean).join(', ');
 
         const markdown = `## ${deal.name}
 
@@ -125,7 +143,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Close Date:** ${deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : 'N/A'}
 
 ### Company
-${deal.company ? `**${deal.company.name}** (${deal.company.id})${deal.company.city || deal.company.country ? `\n**Location:** ${[deal.company.city, deal.company.country].filter(Boolean).join(', ')}` : ''}` : 'No company associated'}
+${companyName ? `**${companyName}** (${deal.company?.id || deal.companyId})${companyLocation ? `\n**Location:** ${companyLocation}` : ''}` : 'No company associated'}
 
 ### Timestamps
 - **Created:** ${new Date(deal.createdAt).toLocaleString()}

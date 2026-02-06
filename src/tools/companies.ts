@@ -49,7 +49,7 @@ ${companies.map((c, i) => `### ${i + 1}. ${c.name}
 - **Domain:** ${c.domain || 'N/A'}
 - **Industry:** ${c.industry || 'N/A'}
 - **Size:** ${c.size || 'N/A'}
-- **Location:** ${[c.city, c.state, c.country].filter(Boolean).join(', ') || 'N/A'}
+- **Location:** ${[c.city || c.location?.city, c.state || c.location?.state, c.country || c.location?.country].filter(Boolean).join(', ') || 'N/A'}
 `).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -99,9 +99,9 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Phone:** ${company.phone || 'N/A'}
 
 ### Address
-${company.address || ''}
-${[company.city, company.state, company.postalCode].filter(Boolean).join(', ')}
-${company.country || ''}
+${company.address || company.location?.address || ''}
+${[company.city || company.location?.city, company.state || company.location?.state, company.postalCode || company.location?.postalCode].filter(Boolean).join(', ')}
+${company.country || company.location?.country || ''}
 
 ### Description
 ${company.description || 'No description'}

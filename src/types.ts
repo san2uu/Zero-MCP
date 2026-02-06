@@ -9,6 +9,14 @@ export interface Workspace {
   updatedAt: string;
 }
 
+export interface CompanyLocation {
+  city?: string;
+  state?: string;
+  country?: string;
+  address?: string;
+  postalCode?: string;
+}
+
 export interface Company {
   id: string;
   workspaceId: string;
@@ -19,11 +27,13 @@ export interface Company {
   description?: string;
   website?: string;
   linkedinUrl?: string;
+  // Location may be returned as flat fields or nested under `location`
   address?: string;
   city?: string;
   state?: string;
   country?: string;
   postalCode?: string;
+  location?: CompanyLocation;
   phone?: string;
   createdAt: string;
   updatedAt: string;

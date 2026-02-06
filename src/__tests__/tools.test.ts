@@ -371,27 +371,62 @@ describe('cross-reference — deals by company location', () => {
 // ─── 11. Deal responses include company location ────────────────────────────
 
 describe('zero_list_deals — company location in output', () => {
-  it('shows company city and country in deal listing', async () => {
+  it('shows company city and country from flat fields', async () => {
+    // First call: list deals
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'd-20', name: 'Local Deal', value: 10000, stage: 'stage-id-1', company: { id: 'co-20', name: 'Tokyo Ltd', country: 'Japan', city: 'Tokyo' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-          { id: 'd-21', name: 'No Location Deal', value: 5000, stage: 'stage-id-2', company: { id: 'co-21', name: 'Mystery Co' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-20', name: 'Local Deal', value: 10000, stage: 'stage-id-1', companyId: 'co-20', company: { id: 'co-20', name: 'Tokyo Ltd' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-21', name: 'No Location Deal', value: 5000, stage: 'stage-id-2', companyId: 'co-21', company: { id: 'co-21', name: 'Mystery Co' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
         ],
         total: 2,
         limit: 20,
         offset: 0,
       },
     });
+    // Second call: enrich companies — flat fields (city, country at top level)
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-20', name: 'Tokyo Ltd', city: 'Tokyo', country: 'Japan' },
+          { id: 'co-21', name: 'Mystery Co' },
+        ],
+      },
+    });
 
     const result = await dealTools.zero_list_deals.handler({});
     const text = result.content[0].text;
 
-    // Company with location shows city, country
     expect(text).toContain('Tokyo Ltd (Tokyo, Japan)');
-    // Company without location shows just the name
     expect(text).toContain('Mystery Co');
     expect(text).not.toContain('Mystery Co (');
+  });
+
+  it('shows company city and country from nested location object', async () => {
+    // First call: list deals
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'd-22', name: 'Nested Deal', value: 20000, stage: 'stage-id-1', companyId: 'co-22', company: { id: 'co-22', name: 'Helsinki Oy' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+    // Second call: enrich companies — nested location object
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-22', name: 'Helsinki Oy', location: { city: 'Helsinki', country: 'Finland' } },
+        ],
+      },
+    });
+
+    const result = await dealTools.zero_list_deals.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Helsinki Oy (Helsinki, Finland)');
   });
 });
 
@@ -399,6 +434,7 @@ describe('zero_list_deals — company location in output', () => {
 
 describe('zero_get_deal — company location in output', () => {
   it('shows company location in single deal view', async () => {
+    // First call: get deal
     mockGet.mockResolvedValueOnce({
       data: {
         data: {
@@ -408,10 +444,19 @@ describe('zero_get_deal — company location in output', () => {
           stage: 'stage-id-3',
           confidence: '0.85',
           closeDate: '2026-09-01T00:00:00Z',
-          company: { id: 'co-30', name: 'London Corp', country: 'United Kingdom', city: 'London' },
+          companyId: 'co-30',
+          company: { id: 'co-30', name: 'London Corp' },
           createdAt: '2024-01-01T00:00:00Z',
           updatedAt: '2024-06-01T00:00:00Z',
         },
+      },
+    });
+    // Second call: enrich company (fetchCompaniesByIds)
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-30', name: 'London Corp', city: 'London', country: 'United Kingdom' },
+        ],
       },
     });
 
@@ -429,14 +474,23 @@ describe('zero_get_deal — company location in output', () => {
 
 describe('cross-reference — deals by stage and company location', () => {
   it('filters deals by both stage and companyId', async () => {
+    // First call: list deals
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'd-40', name: 'Qualified EU Deal', value: 60000, stage: 'stage-id-2', company: { id: 'co-10', name: 'Berlin GmbH', country: 'Germany', city: 'Berlin' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-40', name: 'Qualified EU Deal', value: 60000, stage: 'stage-id-2', companyId: 'co-10', company: { id: 'co-10', name: 'Berlin GmbH' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
         ],
         total: 1,
         limit: 20,
         offset: 0,
+      },
+    });
+    // Second call: enrich companies (fetchCompaniesByIds)
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-10', name: 'Berlin GmbH', city: 'Berlin', country: 'Germany' },
+        ],
       },
     });
 

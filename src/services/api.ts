@@ -125,6 +125,34 @@ export async function resolveStageName(stageId: string | undefined): Promise<str
   }
 }
 
+export async function fetchCompaniesByIds(companyIds: string[]): Promise<Map<string, { name?: string; city?: string; country?: string }>> {
+  const map = new Map<string, { name?: string; city?: string; country?: string }>();
+  const uniqueIds = [...new Set(companyIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return map;
+
+  try {
+    const workspaceId = await ensureWorkspaceId();
+    const client = createApiClient();
+    const params = buildQueryParams({
+      workspaceId,
+      where: { id: { $in: uniqueIds } },
+      limit: uniqueIds.length,
+    });
+    const response = await client.get('/api/companies', { params });
+    const companies = response.data.data || [];
+    for (const c of companies) {
+      // Handle both flat fields (city, country) and nested (location.city, location.country)
+      const city = c.city || c.location?.city;
+      const country = c.country || c.location?.country;
+      map.set(c.id, { name: c.name, city, country });
+    }
+  } catch {
+    // If enrichment fails, return empty map — deals still display without location
+  }
+
+  return map;
+}
+
 export async function ensureWorkspaceId(): Promise<string> {
   if (cachedWorkspaceId) {
     return cachedWorkspaceId;
