@@ -22,7 +22,7 @@ const SOURCE_DATE_FIELDS: Record<Source, string> = {
 
 export const activeDealTools = {
   zero_find_active_deals: {
-    description: 'Find deals that have had recent activity — emails, meetings, LinkedIn messages, custom activities, or Slack messages (issues). Queries all activity sources in parallel, collects deal associations, and returns an enriched deal list with activity summary. This is the recommended tool for questions like "which deals had activity this week?" or "deals with recent engagement".',
+    description: 'Find deals that have had recent activity — emails, meetings, LinkedIn messages, custom activities, or Slack messages (issues). Queries all activity sources in parallel, resolves deals through their company associations, and returns an enriched deal list with activity summary. This is the recommended tool for questions like "which deals had activity this week?" or "deals with recent engagement".',
     inputSchema: z.object({
       since: z.string().describe('ISO date string — only include activity from this date onward (e.g., "2026-02-03")'),
       until: z.string().optional().describe('ISO date string — only include activity before this date (exclusive). Defaults to now.'),
@@ -53,9 +53,7 @@ export const activeDealTools = {
             where[dateField] = { ...where[dateField] as Record<string, unknown>, $lt: args.until };
           }
 
-          // emailThreads and calendarEvents use dealIds (array); activities and issues have no direct deal link
-          const dealField = (source === 'emailThreads' || source === 'calendarEvents') ? 'dealIds' : '';
-          const fieldsList = ['id', dealField, 'companyIds', dateField].filter(Boolean).join(',');
+          const fieldsList = ['id', 'companyIds', dateField].join(',');
 
           const params = buildQueryParams({
             workspaceId,
@@ -66,7 +64,7 @@ export const activeDealTools = {
           });
 
           try {
-            const response = await client.get<ApiListResponse<{ id: string; dealId?: string; companyId?: string; [key: string]: unknown }>>(`/api/${source}`, { params });
+            const response = await client.get<ApiListResponse<{ id: string; companyIds?: string[]; [key: string]: unknown }>>(`/api/${source}`, { params });
             return { source, data: response.data.data || [], total: response.data.total };
           } catch {
             // If a source fails (e.g., issues endpoint doesn't exist yet), skip it
@@ -76,8 +74,8 @@ export const activeDealTools = {
 
         const sourceResults = await Promise.all(sourcePromises);
 
-        // Collect dealIds and build per-deal activity summary
-        const dealSummaries = new Map<string, ActivitySummary>();
+        // Collect companyIds and build per-company activity summary
+        const companySummaries = new Map<string, ActivitySummary>();
 
         const summaryKey = (source: Source): keyof ActivitySummary => {
           switch (source) {
@@ -92,14 +90,13 @@ export const activeDealTools = {
           const dateField = SOURCE_DATE_FIELDS[result.source as Source];
           const key = summaryKey(result.source as Source);
           for (const item of result.data) {
-            // emailThreads and calendarEvents use dealIds (array); others have no direct deal link
-            const itemDealIds: string[] = Array.isArray(item.dealIds)
-              ? item.dealIds as string[]
-              : item.dealId ? [item.dealId as string] : [];
-            if (itemDealIds.length === 0) continue;
+            const itemCompanyIds: string[] = Array.isArray(item.companyIds)
+              ? item.companyIds as string[]
+              : [];
+            if (itemCompanyIds.length === 0) continue;
             const itemDate = item[dateField] as string | undefined;
-            for (const dealId of itemDealIds) {
-              const existing = dealSummaries.get(dealId) || {
+            for (const companyId of itemCompanyIds) {
+              const existing = companySummaries.get(companyId) || {
                 activities: 0,
                 emails: 0,
                 calendarEvents: 0,
@@ -109,13 +106,12 @@ export const activeDealTools = {
               if (itemDate && (!existing.lastActivity || itemDate > existing.lastActivity)) {
                 existing.lastActivity = itemDate;
               }
-              dealSummaries.set(dealId, existing);
+              companySummaries.set(companyId, existing);
             }
           }
         }
 
-        if (dealSummaries.size === 0) {
-          // Build a note about what was checked
+        if (companySummaries.size === 0) {
           const checkedSources = sourceResults.map((r) => `${r.source}: ${r.data.length} records`).join(', ');
           return {
             content: [{
@@ -125,17 +121,17 @@ export const activeDealTools = {
           };
         }
 
-        // Fetch the deals
-        const dealIds = [...dealSummaries.keys()];
+        // Fetch deals linked to active companies
+        const activeCompanyIds = [...companySummaries.keys()];
         const dealWhere: Record<string, unknown> = {
-          id: { $in: dealIds },
+          companyId: { $in: activeCompanyIds },
           ...(args.dealWhere || {}),
         };
 
         const dealParams = buildQueryParams({
           workspaceId,
           where: dealWhere,
-          limit: dealIds.length,
+          limit: activeCompanyIds.length * 5, // companies may have multiple deals
           offset: 0,
           fields: 'id,name,value,stage,confidence,closeDate,companyId,createdAt,updatedAt',
         });
@@ -147,7 +143,7 @@ export const activeDealTools = {
           return {
             content: [{
               type: 'text' as const,
-              text: `Found activity on ${dealIds.length} deal(s) since ${args.since}, but none matched the additional deal filters.`,
+              text: `Found activity for ${activeCompanyIds.length} company/companies since ${args.since}, but no matching deals found.`,
             }],
           };
         }
@@ -161,7 +157,8 @@ export const activeDealTools = {
 
         // Sort deals by last activity date (most recent first)
         const sortedDeals = deals
-          .map((d, i) => ({ deal: d, stageName: stageNames[i], summary: dealSummaries.get(d.id)! }))
+          .map((d, i) => ({ deal: d, stageName: stageNames[i], summary: d.companyId ? companySummaries.get(d.companyId) : undefined }))
+          .filter((item): item is typeof item & { summary: ActivitySummary } => item.summary != null)
           .sort((a, b) => {
             const dateA = a.summary.lastActivity || '';
             const dateB = b.summary.lastActivity || '';

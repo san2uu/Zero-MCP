@@ -1235,8 +1235,8 @@ describe('zero_list_calendar_events — entity associations', () => {
 // ─── 37. Composite: Find active deals ────────────────────────────────────────
 
 describe('zero_find_active_deals', () => {
-  it('queries all sources and returns deals with activity summary', async () => {
-    // Call 1: activities (no dealIds field in schema — won't contribute deal associations)
+  it('queries all sources and returns deals with activity summary via company association', async () => {
+    // Call 1: activities — linked to companies (resolved to deals via companyId)
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
@@ -1246,26 +1246,26 @@ describe('zero_find_active_deals', () => {
         total: 2,
       },
     });
-    // Call 2: emailThreads (uses dealIds array)
+    // Call 2: emailThreads — linked to companies
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'e-1', dealIds: ['d-1'], companyIds: ['co-1'], lastEmailTime: '2026-02-05T14:00:00Z' },
-          { id: 'e-2', dealIds: ['d-2'], companyIds: ['co-2'], lastEmailTime: '2026-02-04T12:00:00Z' },
+          { id: 'e-1', companyIds: ['co-1'], lastEmailTime: '2026-02-05T14:00:00Z' },
+          { id: 'e-2', companyIds: ['co-2'], lastEmailTime: '2026-02-04T12:00:00Z' },
         ],
         total: 2,
       },
     });
-    // Call 3: calendarEvents (uses dealIds array)
+    // Call 3: calendarEvents — linked to companies
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ev-1', dealIds: ['d-1'], companyIds: ['co-1'], startTime: '2026-02-06T09:00:00Z' },
+          { id: 'ev-1', companyIds: ['co-1'], startTime: '2026-02-06T09:00:00Z' },
         ],
         total: 1,
       },
     });
-    // Call 4: issues (no dealIds field in schema)
+    // Call 4: issues — linked to companies
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
@@ -1274,7 +1274,7 @@ describe('zero_find_active_deals', () => {
         total: 1,
       },
     });
-    // Call 5: fetch deals
+    // Call 5: fetch deals (by companyId $in)
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
@@ -1303,10 +1303,12 @@ describe('zero_find_active_deals', () => {
     expect(text).toContain('2 deals');
     expect(text).toContain('Acme Deal');
     expect(text).toContain('Globex Deal');
-    // Acme Deal: 1 email + 1 meeting (activities have no direct deal link)
+    // Acme Deal (co-1): 1 activity + 1 email + 1 meeting
+    expect(text).toContain('1 activity');
     expect(text).toContain('1 email');
     expect(text).toContain('1 meeting');
-    // Globex Deal: 1 email
+    // Globex Deal (co-2): 1 activity + 1 email + 1 Slack message
+    expect(text).toContain('1 Slack message');
     expect(text).toContain('Acme Corp (SF, US)');
     expect(text).toContain('Globex Inc (NYC, US)');
     expect(result).not.toHaveProperty('isError');
@@ -1329,7 +1331,7 @@ describe('zero_find_active_deals', () => {
   });
 
   it('handles source failures gracefully', async () => {
-    // activities succeeds but no deal associations
+    // activities succeeds with company link
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
@@ -1338,11 +1340,11 @@ describe('zero_find_active_deals', () => {
         total: 1,
       },
     });
-    // emailThreads succeeds with deal link
+    // emailThreads succeeds with company link
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'e-1', dealIds: ['d-1'], companyIds: ['co-1'], lastEmailTime: '2026-02-04T14:00:00Z' },
+          { id: 'e-1', companyIds: ['co-1'], lastEmailTime: '2026-02-04T14:00:00Z' },
         ],
         total: 1,
       },
@@ -1351,7 +1353,7 @@ describe('zero_find_active_deals', () => {
     mockGet.mockRejectedValueOnce(new Error('API error'));
     // issues fails
     mockGet.mockRejectedValueOnce(new Error('API error'));
-    // fetch deals
+    // fetch deals (by companyId $in)
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
@@ -1375,6 +1377,7 @@ describe('zero_find_active_deals', () => {
     const text = result.content[0].text;
 
     expect(text).toContain('Resilient Deal');
+    expect(text).toContain('1 activity');
     expect(text).toContain('1 email');
     expect(result).not.toHaveProperty('isError');
   });
