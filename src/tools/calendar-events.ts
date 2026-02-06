@@ -5,6 +5,36 @@ import { CalendarEvent, ApiListResponse } from '../types.js';
 import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
 
 /**
+ * Deduplicates calendar events by name + startTime (truncated to minute).
+ * When merging, unions all array fields (contactIds, companyIds, dealIds, userIds, attendeeEmails)
+ * and keeps the first event's scalar fields (id, name, description, location, endTime).
+ * Returns { events, duplicatesRemoved }.
+ */
+export function deduplicateCalendarEvents(events: CalendarEvent[]): { events: CalendarEvent[]; duplicatesRemoved: number } {
+  const seen = new Map<string, CalendarEvent>();
+  let duplicatesRemoved = 0;
+
+  for (const event of events) {
+    const key = `${(event.name || '').trim().toLowerCase()}|${(event.startTime || '').slice(0, 16)}`;
+    const existing = seen.get(key);
+    if (existing) {
+      // Union array fields
+      existing.contactIds = [...new Set([...(existing.contactIds || []), ...(event.contactIds || [])])];
+      existing.companyIds = [...new Set([...(existing.companyIds || []), ...(event.companyIds || [])])];
+      existing.dealIds = [...new Set([...(existing.dealIds || []), ...(event.dealIds || [])])];
+      existing.userIds = [...new Set([...(existing.userIds || []), ...(event.userIds || [])])];
+      existing.attendeeEmails = [...new Set([...(existing.attendeeEmails || []), ...(event.attendeeEmails || [])])];
+      duplicatesRemoved++;
+    } else {
+      // Clone to avoid mutating the original
+      seen.set(key, { ...event });
+    }
+  }
+
+  return { events: [...seen.values()], duplicatesRemoved };
+}
+
+/**
  * Manually resolves included relations on calendar events.
  * Used as a workaround when the API's JOIN-based include fails with 500
  * when combined with where/orderBy filters.
@@ -88,8 +118,9 @@ export const calendarEventTools = {
       fields: z.string().optional().describe('Comma-separated fields to include'),
       include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, companies, tasks. Use include: ["contacts"] to get full contact details instead of just IDs.'),
       excludeNullDates: z.boolean().optional().default(true).describe('Exclude events with no start time (default: true). Set false to include all.'),
+      deduplicate: z.boolean().optional().default(true).describe('Merge duplicate events (same name + start time to the minute). Unions contactIds, companyIds, dealIds, userIds, attendeeEmails. Default: true.'),
     }),
-    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; include?: string[]; excludeNullDates?: boolean }) => {
+    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; include?: string[]; excludeNullDates?: boolean; deduplicate?: boolean }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
@@ -129,11 +160,21 @@ export const calendarEventTools = {
         if (useIncludeFallback && events.length > 0) {
           await resolveCalendarEventIncludes(client, workspaceId, events, args.include!);
         }
+
+        // Deduplicate events if enabled (default: true)
+        let displayEvents = events;
+        let duplicatesRemoved = 0;
+        if (args.deduplicate !== false && events.length > 0) {
+          const dedupResult = deduplicateCalendarEvents(events);
+          displayEvents = dedupResult.events;
+          duplicatesRemoved = dedupResult.duplicatesRemoved;
+        }
+
         const limit = args.limit || 20;
         const offset = args.offset || 0;
         const hasMore = total ? offset + events.length < total : events.length === limit;
 
-        if (events.length === 0) {
+        if (displayEvents.length === 0) {
           return {
             content: [{
               type: 'text' as const,
@@ -142,9 +183,10 @@ export const calendarEventTools = {
           };
         }
 
-        const markdown = `## Calendar Events (${events.length}${total ? ` of ${total}` : ''})
+        const dedupNote = duplicatesRemoved > 0 ? ` (${displayEvents.length} unique, ${duplicatesRemoved} duplicates removed)` : '';
+        const markdown = `## Calendar Events (${displayEvents.length}${total ? ` of ${total}` : ''}${dedupNote})
 
-${events.map((ev, i) => {
+${displayEvents.map((ev, i) => {
   const start = ev.startTime ? new Date(ev.startTime).toLocaleString() : 'N/A';
   const end = ev.endTime ? new Date(ev.endTime).toLocaleString() : '';
   return `### ${i + 1}. ${ev.name || 'Untitled'}

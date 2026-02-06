@@ -24,14 +24,14 @@ src/
   tools/
     workspaces.ts       # Workspace tools (get, list, switch)
     companies.ts        # Company CRUD + include support
-    contacts.ts         # Contact CRUD + include support
+    contacts.ts         # Contact CRUD + include support + bulk resolve
     deals.ts            # Deal CRUD + include support
     pipeline-stages.ts  # Pipeline stage listing
     tasks.ts            # Task CRUD
     notes.ts            # Note CRUD
     activities.ts       # Activity read-only (list, get)
     email-threads.ts    # Email thread read-only (list, get)
-    calendar-events.ts  # Calendar event read-only (list, get)
+    calendar-events.ts  # Calendar event read-only (list, get) + include support
     comments.ts         # Comment CRUD
     issues.ts           # Issue read-only (list, get) — Slack messages via Pylon/Plain
     lists.ts            # List read-only (list, get)
@@ -48,7 +48,7 @@ src/
 
 **Query params:** `buildQueryParams()` serializes `where` and `orderBy` as JSON strings. The `where` param uses MongoDB-style `$`-prefixed operators (`$contains`, `$gte`, `$in`, etc.).
 
-**Relational queries:** Companies, contacts, and deals support an `include: string[]` parameter that appends dot-notation relation fields to the API request and renders related data as markdown. The relations service (`services/relations.ts`) maps entity types to available relations and their fields.
+**Relational queries:** Companies, contacts, deals, and calendar events support an `include: string[]` parameter that appends dot-notation relation fields to the API request and renders related data as markdown. The relations service (`services/relations.ts`) maps entity types to available relations and their fields.
 
 **Content fields:** Tasks, notes, and comments have content/description fields typed as `string | Record<string, unknown>`. Display with `JSON.stringify` if object.
 
@@ -58,11 +58,23 @@ src/
 
 **Entity associations:** Email threads and calendar events use plural array fields (`dealIds`, `companyIds`, `contactIds`). Activities use `companyIds`/`contactIds` but have no direct deal link. Issues use `companyIds`/`contactIds` with no deal link. Always refer to `SCHEMA_AND_RELATIONS.md` for the canonical field names.
 
+**Bulk contact resolve:** `zero_resolve_contacts` takes an array of contact IDs and returns their details in one call using `$in` filter. Reports which IDs couldn't be resolved (may be internal workspace members).
+
+**Calendar event includes:** `zero_list_calendar_events` and `zero_get_calendar_event` support `include: ["contacts", "companies", "tasks"]` to resolve related entities inline instead of just returning ID arrays.
+
 **Composite tools:** `zero_find_active_deals` queries activity sources in parallel with a date filter. Only emailThreads and calendarEvents contribute direct deal associations (via `dealIds` arrays). Activities and issues are queried but cannot be correlated to deals directly. Handles source failures gracefully.
 
 **Issues:** Slack messages synced via Pylon/Plain are exposed as "issues" (`/api/issues`). The Issue entity has title, description, status, priority, source, and entity association fields.
 
+**Calendar event deduplication:** `zero_list_calendar_events` has a `deduplicate` param (default: `true`) that merges duplicate events sharing the same name + startTime (truncated to minute). Merged events union their array fields (`contactIds`, `companyIds`, `dealIds`, `userIds`, `attendeeEmails`). The output header shows duplicate count when dedup is active.
+
 **Legacy params:** `includeCompany` (contacts) and `includeRelations` (deals) still work when `include` is absent. When `include` is provided, it supersedes them.
+
+## Design Principles
+
+**Prefer composable primitives over single-purpose composite tools.** The MCP client (Claude/LLM) is capable of orchestrating multi-step queries by chaining existing tools. Don't create a new tool for every question pattern users might have — instead, make the existing tools expressive enough (with `include`, `where`, `$in`, `$contains`, etc.) so the client can answer complex questions by combining them. Only create composite tools when the orchestration requires server-side logic that the client genuinely cannot perform (e.g., `zero_find_active_deals` queries 4 sources in parallel and correlates results through company associations — something impractical for the client to do in a single turn).
+
+**Enrich tool descriptions** with example multi-tool workflows so the MCP client knows how to compose them. For instance, "who did we meet this week?" is answered by `zero_list_calendar_events` with a date filter + `include: ["contacts"]` — no dedicated tool needed.
 
 ## Testing
 

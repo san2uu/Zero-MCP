@@ -2,7 +2,7 @@
 // Maps entity types to their available relations and the dot-notation fields
 // needed to fetch related data via the Zero API's `fields` parameter.
 
-type EntityType = 'company' | 'contact' | 'deal';
+type EntityType = 'company' | 'contact' | 'deal' | 'calendarEvent';
 
 const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
   company: {
@@ -11,7 +11,7 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
     notes: 'notes.id,notes.content,notes.createdAt',
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
-    calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
+    calendarEvents: 'calendarEvents.id,calendarEvents.name,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.name,activities.time',
     issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
@@ -22,7 +22,7 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
     notes: 'notes.id,notes.content,notes.createdAt',
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
-    calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
+    calendarEvents: 'calendarEvents.id,calendarEvents.name,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.name,activities.time',
     issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
@@ -33,10 +33,15 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
     notes: 'notes.id,notes.content,notes.createdAt',
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
-    calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
+    calendarEvents: 'calendarEvents.id,calendarEvents.name,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.name,activities.time',
     issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
+  },
+  calendarEvent: {
+    contacts: 'contacts.id,contacts.firstName,contacts.lastName,contacts.email,contacts.title',
+    companies: 'companies.id,companies.name,companies.domain',
+    tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
   },
 };
 
@@ -96,6 +101,9 @@ export function formatIncludedRelations(entityType: EntityType, record: Record<s
       case 'contacts':
         itemLines = items.map((c) => `- ${c.firstName || ''} ${c.lastName || ''} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}`);
         break;
+      case 'companies':
+        itemLines = items.map((c) => `- **${c.name || 'N/A'}**${c.domain ? ` (${c.domain})` : ''}`);
+        break;
       case 'deals':
         itemLines = items.map((d) => {
           const val = d.value != null ? `$${Number(d.value).toLocaleString()}` : 'N/A';
@@ -119,7 +127,7 @@ export function formatIncludedRelations(entityType: EntityType, record: Record<s
         itemLines = items.map((ev) => {
           const start = ev.startTime ? new Date(ev.startTime as string).toLocaleString() : 'N/A';
           const end = ev.endTime ? new Date(ev.endTime as string).toLocaleString() : '';
-          return `- ${ev.title || 'Untitled'} — ${start}${end ? ` to ${end}` : ''}`;
+          return `- ${ev.name || 'Untitled'} — ${start}${end ? ` to ${end}` : ''}`;
         });
         break;
       case 'activities':

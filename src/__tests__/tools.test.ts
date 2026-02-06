@@ -1744,3 +1744,85 @@ describe('zero_get_contact — response unwrapping', () => {
     expect(result).not.toHaveProperty('isError');
   });
 });
+
+// ─── 42. Calendar event deduplication ─────────────────────────────────────────
+
+describe('zero_list_calendar_events — deduplication', () => {
+  it('merges duplicate events with same name+startTime and unions array fields', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Weekly Sync', startTime: '2026-02-05T14:00:00Z', endTime: '2026-02-05T14:30:00Z',
+            location: 'Zoom', contactIds: ['ct-1'], companyIds: ['co-1'], dealIds: ['d-1'], userIds: ['u-1'], attendeeEmails: ['a@test.com'],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+          {
+            id: 'ev-2', name: 'Weekly Sync', startTime: '2026-02-05T14:00:00Z', endTime: '2026-02-05T14:30:00Z',
+            location: 'Zoom', contactIds: ['ct-2'], companyIds: ['co-2'], dealIds: ['d-2'], userIds: ['u-2'], attendeeEmails: ['b@test.com'],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+          {
+            id: 'ev-3', name: 'Different Meeting', startTime: '2026-02-06T10:00:00Z', endTime: '2026-02-06T10:30:00Z',
+            location: 'Office', contactIds: ['ct-3'], companyIds: [], dealIds: [], userIds: ['u-1'], attendeeEmails: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+        ],
+        total: 3,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+    });
+    const text = result.content[0].text;
+
+    // Should show 2 unique, 1 duplicate removed
+    expect(text).toContain('2 unique');
+    expect(text).toContain('1 duplicates removed');
+    // Should have merged contact/company/deal IDs
+    expect(text).toContain('ct-1');
+    expect(text).toContain('ct-2');
+    expect(text).toContain('co-1');
+    expect(text).toContain('co-2');
+    // Different meeting should still be present
+    expect(text).toContain('Different Meeting');
+    expect(result).not.toHaveProperty('isError');
+  });
+
+  it('skips dedup when deduplicate=false', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Same Meeting', startTime: '2026-02-05T14:00:00Z',
+            contactIds: ['ct-1'], companyIds: [], dealIds: [], userIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+          {
+            id: 'ev-2', name: 'Same Meeting', startTime: '2026-02-05T14:00:00Z',
+            contactIds: ['ct-2'], companyIds: [], dealIds: [], userIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      deduplicate: false,
+    });
+    const text = result.content[0].text;
+
+    // Should show both events without dedup
+    expect(text).toContain('Calendar Events (2');
+    expect(text).not.toContain('unique');
+    expect(text).not.toContain('duplicates removed');
+  });
+});
+

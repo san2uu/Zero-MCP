@@ -26,7 +26,7 @@ export interface Company {
   size?: string;
   description?: string;
   website?: string;
-  linkedinUrl?: string;
+  linkedin?: string;
   // Location may be returned as flat fields or nested under `location`
   address?: string;
   city?: string;
@@ -50,7 +50,7 @@ export interface Contact {
   email?: string;
   phone?: string;
   title?: string;
-  linkedinUrl?: string;
+  linkedin?: string;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -193,15 +193,20 @@ export interface Comment {
 export interface Issue {
   id: string;
   workspaceId: string;
-  title?: string;
+  name?: string;
   description?: string | Record<string, unknown>;
   status?: string;
-  priority?: string;
+  priority?: number;
   source?: string;
-  companyId?: string;
-  contactId?: string;
-  dealId?: string;
-  assigneeIds?: string[];
+  type?: string;
+  companyIds?: string[];
+  contactIds?: string[];
+  issueNumber?: string;
+  previewText?: string;
+  link?: string;
+  channel?: string;
+  labels?: string[];
+  time?: string;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;

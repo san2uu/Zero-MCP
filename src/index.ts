@@ -17,6 +17,7 @@ import { issueTools } from './tools/issues.js';
 import { listTools } from './tools/lists.js';
 import { activeDealTools } from './tools/active-deals.js';
 
+
 const server = new McpServer({
   name: 'zero-crm',
   version: '1.0.0',
@@ -93,6 +94,13 @@ server.tool(
   contactTools.zero_get_contact.description,
   contactTools.zero_get_contact.inputSchema.shape,
   contactTools.zero_get_contact.handler
+);
+
+server.tool(
+  'zero_resolve_contacts',
+  contactTools.zero_resolve_contacts.description,
+  contactTools.zero_resolve_contacts.inputSchema.shape,
+  contactTools.zero_resolve_contacts.handler
 );
 
 server.tool(

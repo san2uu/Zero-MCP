@@ -32,6 +32,24 @@ export function createApiClient(): AxiosInstance {
   return client;
 }
 
+function transformWhereClause(where: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [field, condition] of Object.entries(where)) {
+    if (condition && typeof condition === 'object' && !Array.isArray(condition)) {
+      const cond = condition as Record<string, unknown>;
+      if ('$gte' in cond && ('$lte' in cond || '$lt' in cond)) {
+        const { $gte, $lte, $lt, ...rest } = cond;
+        result[field] = { ...rest, $between: [$gte, $lte ?? $lt] };
+      } else {
+        result[field] = condition;
+      }
+    } else {
+      result[field] = condition;
+    }
+  }
+  return result;
+}
+
 export function buildQueryParams(params: ListParams): Record<string, string> {
   const query: Record<string, string> = {};
 
@@ -42,7 +60,7 @@ export function buildQueryParams(params: ListParams): Record<string, string> {
     query.fields = params.fields;
   }
   if (params.where) {
-    query.where = JSON.stringify(params.where);
+    query.where = JSON.stringify(transformWhereClause(params.where));
   }
   if (params.limit !== undefined) {
     query.limit = String(params.limit);

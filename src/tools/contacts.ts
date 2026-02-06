@@ -106,18 +106,18 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         let fields = args.fields;
         if (args.include && args.include.length > 0) {
           if (!fields) {
-            fields = 'id,firstName,lastName,email,phone,title,linkedinUrl,companyId,createdAt,updatedAt,archivedAt';
+            fields = 'id,firstName,lastName,email,phone,title,linkedin,companyId,createdAt,updatedAt,archivedAt';
           }
           fields = buildIncludeFields('contact', args.include, fields);
         } else if (!fields) {
-          fields = 'id,firstName,lastName,email,phone,title,linkedinUrl,companyId,company.id,company.name,createdAt,updatedAt,archivedAt';
+          fields = 'id,firstName,lastName,email,phone,title,linkedin,companyId,company.id,company.name,createdAt,updatedAt,archivedAt';
         }
 
         const params: Record<string, string> = { workspaceId };
         if (fields) params.fields = fields;
 
-        const response = await client.get<Contact>(`/api/contacts/${args.id}`, { params });
-        const contact = response.data;
+        const response = await client.get(`/api/contacts/${args.id}`, { params });
+        const contact: Contact = (response.data as any).data || response.data;
 
         let markdown = `## ${contact.firstName} ${contact.lastName}
 
@@ -125,7 +125,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Email:** ${contact.email || 'N/A'}
 **Phone:** ${contact.phone || 'N/A'}
 **Title:** ${contact.title || 'N/A'}
-**LinkedIn:** ${contact.linkedinUrl || 'N/A'}
+**LinkedIn:** ${contact.linkedin || 'N/A'}
 
 ### Company
 ${contact.company ? `**${contact.company.name}** (${contact.company.id})` : 'No company associated'}
@@ -165,10 +165,10 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
       email: z.string().optional().describe('Email address'),
       phone: z.string().optional().describe('Phone number'),
       title: z.string().optional().describe('Job title'),
-      linkedinUrl: z.string().optional().describe('LinkedIn URL'),
+      linkedin: z.string().optional().describe('LinkedIn profile URL'),
       companyId: z.string().optional().describe('Company ID to associate with'),
     }),
-    handler: async (args: { firstName: string; lastName: string; email?: string; phone?: string; title?: string; linkedinUrl?: string; companyId?: string }) => {
+    handler: async (args: { firstName: string; lastName: string; email?: string; phone?: string; title?: string; linkedin?: string; companyId?: string }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
@@ -212,10 +212,10 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
       email: z.string().optional().describe('Email address'),
       phone: z.string().optional().describe('Phone number'),
       title: z.string().optional().describe('Job title'),
-      linkedinUrl: z.string().optional().describe('LinkedIn URL'),
+      linkedin: z.string().optional().describe('LinkedIn profile URL'),
       companyId: z.string().optional().describe('Company ID to associate with'),
     }),
-    handler: async (args: { id: string; firstName?: string; lastName?: string; email?: string; phone?: string; title?: string; linkedinUrl?: string; companyId?: string }) => {
+    handler: async (args: { id: string; firstName?: string; lastName?: string; email?: string; phone?: string; title?: string; linkedin?: string; companyId?: string }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
@@ -244,6 +244,80 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
           content: [{
             type: 'text' as const,
             text: `Error updating contact: ${formatApiError(error)}`,
+          }],
+          isError: true,
+        };
+      }
+    },
+  },
+
+  zero_resolve_contacts: {
+    description: 'Resolve multiple contacts by their IDs in a single call. Useful for bulk-resolving contact IDs from calendar events, email threads, etc. Returns contact details for all found IDs. Some IDs may not resolve (e.g., internal workspace members).',
+    inputSchema: z.object({
+      ids: z.array(z.string()).describe('Array of contact IDs to resolve'),
+      fields: z.string().optional().describe('Comma-separated fields to include'),
+    }),
+    handler: async (args: { ids: string[]; fields?: string }) => {
+      try {
+        const workspaceId = await ensureWorkspaceId();
+        const client = createApiClient();
+
+        const uniqueIds = [...new Set(args.ids.filter(Boolean))];
+        if (uniqueIds.length === 0) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: 'No contact IDs provided.',
+            }],
+          };
+        }
+
+        const fields = args.fields || 'id,firstName,lastName,email,phone,title,companyId,company.id,company.name,createdAt';
+
+        const params = buildQueryParams({
+          workspaceId,
+          where: { id: { $in: uniqueIds } },
+          limit: uniqueIds.length,
+          fields,
+        });
+
+        const response = await client.get<ApiListResponse<Contact>>('/api/contacts', { params });
+        const contacts = response.data.data || [];
+
+        const resolvedIds = new Set(contacts.map((c: Contact) => c.id));
+        const unresolvedIds = uniqueIds.filter((id) => !resolvedIds.has(id));
+
+        if (contacts.length === 0) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `No contacts found for ${uniqueIds.length} ID(s). These may be internal workspace members or deleted contacts.`,
+            }],
+          };
+        }
+
+        const markdown = `## Resolved Contacts (${contacts.length} of ${uniqueIds.length} IDs)
+
+${contacts.map((c: Contact, i: number) => `### ${i + 1}. ${c.firstName} ${c.lastName}
+- **ID:** ${c.id}
+- **Email:** ${c.email || 'N/A'}
+- **Phone:** ${c.phone || 'N/A'}
+- **Title:** ${c.title || 'N/A'}
+- **Company:** ${c.company?.name || 'N/A'}
+`).join('\n')}
+${unresolvedIds.length > 0 ? `\n### Unresolved IDs (${unresolvedIds.length})\nThese may be internal workspace members or deleted contacts:\n${unresolvedIds.map((id) => `- ${id}`).join('\n')}` : ''}`;
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: markdown,
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error resolving contacts: ${formatApiError(error)}`,
           }],
           isError: true,
         };

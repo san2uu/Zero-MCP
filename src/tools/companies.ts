@@ -114,7 +114,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Industry:** ${company.industry || 'N/A'}
 **Size:** ${company.size || 'N/A'}
 **Website:** ${company.website || 'N/A'}
-**LinkedIn:** ${company.linkedinUrl || 'N/A'}
+**LinkedIn:** ${company.linkedin || 'N/A'}
 **Phone:** ${company.phone || 'N/A'}
 
 ### Address
@@ -161,7 +161,7 @@ ${company.archivedAt ? `- **Archived:** ${new Date(company.archivedAt).toLocaleS
       size: z.string().optional().describe('Company size'),
       description: z.string().optional().describe('Company description'),
       website: z.string().optional().describe('Website URL'),
-      linkedinUrl: z.string().optional().describe('LinkedIn URL'),
+      linkedin: z.string().optional().describe('LinkedIn profile URL'),
       address: z.string().optional().describe('Street address'),
       city: z.string().optional().describe('City'),
       state: z.string().optional().describe('State/Province'),
@@ -213,7 +213,7 @@ ${company.archivedAt ? `- **Archived:** ${new Date(company.archivedAt).toLocaleS
       size: z.string().optional().describe('Company size'),
       description: z.string().optional().describe('Company description'),
       website: z.string().optional().describe('Website URL'),
-      linkedinUrl: z.string().optional().describe('LinkedIn URL'),
+      linkedin: z.string().optional().describe('LinkedIn profile URL'),
       address: z.string().optional().describe('Street address'),
       city: z.string().optional().describe('City'),
       state: z.string().optional().describe('State/Province'),
