@@ -4,7 +4,7 @@ import { CalendarEvent, ApiListResponse } from '../types.js';
 
 export const calendarEventTools = {
   zero_list_calendar_events: {
-    description: 'List calendar events in Zero CRM with optional filtering and pagination. Filter examples: {"companyId": "uuid"}, {"contactId": "uuid"}, {"dealId": "uuid"}.',
+    description: 'List calendar events (meetings) in Zero CRM. Each event has dealId, companyId, contactId fields for entity association. To find deals with recent meetings, filter by startTime and collect dealId values. Filter examples: {"dealId": "uuid"}, {"companyId": "uuid"}, {"startTime": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"companyId": "uuid"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
@@ -51,6 +51,9 @@ ${events.map((ev, i) => {
 - **ID:** ${ev.id}
 - **When:** ${start}${end ? ` to ${end}` : ''}
 - **Location:** ${ev.location || 'N/A'}
+${ev.dealId ? `- **Deal ID:** ${ev.dealId}` : ''}
+${ev.companyId ? `- **Company ID:** ${ev.companyId}` : ''}
+${ev.contactId ? `- **Contact ID:** ${ev.contactId}` : ''}
 `;
 }).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
@@ -100,6 +103,11 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **End:** ${end}
 **Location:** ${event.location || 'N/A'}
 **Description:** ${event.description || 'N/A'}
+
+### Associations
+${event.dealId ? `- **Deal ID:** ${event.dealId}` : '- **Deal:** None'}
+${event.companyId ? `- **Company ID:** ${event.companyId}` : '- **Company:** None'}
+${event.contactId ? `- **Contact ID:** ${event.contactId}` : '- **Contact:** None'}
 
 ### Timestamps
 - **Created:** ${new Date(event.createdAt).toLocaleString()}

@@ -13,7 +13,9 @@ import { activityTools } from './tools/activities.js';
 import { emailThreadTools } from './tools/email-threads.js';
 import { calendarEventTools } from './tools/calendar-events.js';
 import { commentTools } from './tools/comments.js';
+import { issueTools } from './tools/issues.js';
 import { listTools } from './tools/lists.js';
+import { activeDealTools } from './tools/active-deals.js';
 
 const server = new McpServer({
   name: 'zero-crm',
@@ -311,6 +313,21 @@ server.tool(
   commentTools.zero_delete_comment.handler
 );
 
+// Register issue tools (Slack messages via Pylon/Plain)
+server.tool(
+  'zero_list_issues',
+  issueTools.zero_list_issues.description,
+  issueTools.zero_list_issues.inputSchema.shape,
+  issueTools.zero_list_issues.handler
+);
+
+server.tool(
+  'zero_get_issue',
+  issueTools.zero_get_issue.description,
+  issueTools.zero_get_issue.inputSchema.shape,
+  issueTools.zero_get_issue.handler
+);
+
 // Register list tools
 server.tool(
   'zero_list_lists',
@@ -324,6 +341,14 @@ server.tool(
   listTools.zero_get_list.description,
   listTools.zero_get_list.inputSchema.shape,
   listTools.zero_get_list.handler
+);
+
+// Register composite tools
+server.tool(
+  'zero_find_active_deals',
+  activeDealTools.zero_find_active_deals.description,
+  activeDealTools.zero_find_active_deals.inputSchema.shape,
+  activeDealTools.zero_find_active_deals.handler
 );
 
 async function main() {

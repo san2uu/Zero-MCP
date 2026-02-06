@@ -13,7 +13,7 @@ export const dealTools = {
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"value": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
       includeRelations: z.boolean().optional().default(true).describe('Include company details (legacy, prefer "include" param)'),
-      include: z.array(z.string()).optional().describe('Related entities to include inline: company, contacts, tasks, notes, emailThreads, calendarEvents, activities, comments'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: company, contacts, tasks, notes, emailThreads, calendarEvents, activities, issues, comments'),
     }),
     handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; includeRelations?: boolean; include?: string[] }) => {
       try {
@@ -121,7 +121,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
     inputSchema: z.object({
       id: z.string().describe('The deal ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
-      include: z.array(z.string()).optional().describe('Related entities to include inline: company, contacts, tasks, notes, emailThreads, calendarEvents, activities, comments'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: company, contacts, tasks, notes, emailThreads, calendarEvents, activities, issues, comments'),
     }),
     handler: async (args: { id: string; fields?: string; include?: string[] }) => {
       try {

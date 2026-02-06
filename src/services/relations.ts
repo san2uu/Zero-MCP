@@ -13,6 +13,7 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastMessageAt',
     calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.description,activities.occurredAt',
+    issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
   },
   contact: {
@@ -23,6 +24,7 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastMessageAt',
     calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.description,activities.occurredAt',
+    issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
   },
   deal: {
@@ -33,6 +35,7 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastMessageAt',
     calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.description,activities.occurredAt',
+    issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
   },
 };
@@ -121,6 +124,9 @@ export function formatIncludedRelations(entityType: EntityType, record: Record<s
         break;
       case 'activities':
         itemLines = items.map((a) => `- [${a.type || 'unknown'}] ${a.description || 'N/A'}${a.occurredAt ? ` (${new Date(a.occurredAt as string).toLocaleDateString()})` : ''}`);
+        break;
+      case 'issues':
+        itemLines = items.map((iss) => `- ${iss.title || 'Untitled'} — ${iss.status || 'N/A'}${iss.source ? ` (${iss.source})` : ''}${iss.createdAt ? ` — ${new Date(iss.createdAt as string).toLocaleDateString()}` : ''}`);
         break;
       case 'comments':
         itemLines = items.map((c) => `- ${formatContent(c.content)} — ${c.createdAt ? new Date(c.createdAt as string).toLocaleDateString() : ''}`);

@@ -39,7 +39,9 @@ import { activityTools } from '../tools/activities.js';
 import { emailThreadTools } from '../tools/email-threads.js';
 import { calendarEventTools } from '../tools/calendar-events.js';
 import { commentTools } from '../tools/comments.js';
+import { issueTools } from '../tools/issues.js';
 import { listTools } from '../tools/lists.js';
+import { activeDealTools } from '../tools/active-deals.js';
 import { setCachedWorkspaceId, setCachedPipelineStages } from '../services/api.js';
 import { AxiosError } from 'axios';
 
@@ -1065,5 +1067,311 @@ describe('zero_create_note', () => {
       dealId: 'd-1',
       workspaceId: WORKSPACE_ID,
     }));
+  });
+});
+
+// ─── 32. New entity: List issues (Slack messages) ────────────────────────────
+
+describe('zero_list_issues', () => {
+  it('lists issues with entity associations', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'iss-1', title: 'Customer request', status: 'open', source: 'slack', description: 'Need pricing info', dealId: 'd-1', companyId: 'co-1', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'iss-2', title: 'Bug report', status: 'closed', source: 'slack', description: 'Login issue', contactId: 'ct-1', createdAt: '2024-06-16T00:00:00Z', updatedAt: '2024-06-16T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await issueTools.zero_list_issues.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Issues (2 of 2)');
+    expect(text).toContain('Customer request');
+    expect(text).toContain('Bug report');
+    expect(text).toContain('open');
+    expect(text).toContain('slack');
+    expect(text).toContain('Deal ID:');
+    expect(text).toContain('d-1');
+    expect(text).toContain('Company ID:');
+    expect(text).toContain('co-1');
+    expect(result).not.toHaveProperty('isError');
+  });
+
+  it('filters by date', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'iss-3', title: 'Recent message', status: 'open', createdAt: '2026-02-04T00:00:00Z', updatedAt: '2026-02-04T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const where = { createdAt: { $gte: '2026-02-03' } };
+    await issueTools.zero_list_issues.handler({ where });
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBe(JSON.stringify(where));
+  });
+});
+
+// ─── 33. Get issue ───────────────────────────────────────────────────────────
+
+describe('zero_get_issue', () => {
+  it('returns issue with full details and associations', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: 'iss-1',
+          title: 'Customer request',
+          status: 'open',
+          priority: 'high',
+          source: 'slack',
+          description: 'Need pricing info',
+          dealId: 'd-1',
+          companyId: 'co-1',
+          contactId: 'ct-1',
+          createdAt: '2024-06-15T00:00:00Z',
+          updatedAt: '2024-06-15T00:00:00Z',
+        },
+      },
+    });
+
+    const result = await issueTools.zero_get_issue.handler({ id: 'iss-1' });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Customer request');
+    expect(text).toContain('open');
+    expect(text).toContain('high');
+    expect(text).toContain('slack');
+    expect(text).toContain('Deal ID:');
+    expect(text).toContain('Company ID:');
+    expect(text).toContain('Contact ID:');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 34. Activities show entity association IDs ──────────────────────────────
+
+describe('zero_list_activities — entity associations', () => {
+  it('shows dealId, companyId, contactId in output', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'a-1', type: 'call', description: 'Sales call', occurredAt: '2024-06-15T10:00:00Z', dealId: 'd-1', companyId: 'co-1', contactId: 'ct-1', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await activityTools.zero_list_activities.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Deal ID:');
+    expect(text).toContain('d-1');
+    expect(text).toContain('Company ID:');
+    expect(text).toContain('co-1');
+    expect(text).toContain('Contact ID:');
+    expect(text).toContain('ct-1');
+  });
+});
+
+// ─── 35. Email threads show entity association IDs ───────────────────────────
+
+describe('zero_list_email_threads — entity associations', () => {
+  it('shows dealId, companyId in output', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'e-1', subject: 'Follow up', snippet: 'Hi...', from: 'a@b.com', lastMessageAt: '2024-06-15T10:00:00Z', dealId: 'd-5', companyId: 'co-5', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await emailThreadTools.zero_list_email_threads.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Deal ID:');
+    expect(text).toContain('d-5');
+    expect(text).toContain('Company ID:');
+    expect(text).toContain('co-5');
+  });
+});
+
+// ─── 36. Calendar events show entity association IDs ─────────────────────────
+
+describe('zero_list_calendar_events — entity associations', () => {
+  it('shows dealId, companyId in output', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ev-1', title: 'Call', startTime: '2024-06-15T09:00:00Z', endTime: '2024-06-15T09:30:00Z', location: 'Zoom', dealId: 'd-7', companyId: 'co-7', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Deal ID:');
+    expect(text).toContain('d-7');
+    expect(text).toContain('Company ID:');
+    expect(text).toContain('co-7');
+  });
+});
+
+// ─── 37. Composite: Find active deals ────────────────────────────────────────
+
+describe('zero_find_active_deals', () => {
+  it('queries all sources and returns deals with activity summary', async () => {
+    // Call 1: activities
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'a-1', dealId: 'd-1', companyId: 'co-1', occurredAt: '2026-02-04T10:00:00Z' },
+          { id: 'a-2', dealId: 'd-2', companyId: 'co-2', occurredAt: '2026-02-05T10:00:00Z' },
+        ],
+        total: 2,
+      },
+    });
+    // Call 2: emailThreads
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'e-1', dealId: 'd-1', companyId: 'co-1', lastMessageAt: '2026-02-05T14:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+    // Call 3: calendarEvents
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ev-1', dealId: 'd-1', companyId: 'co-1', startTime: '2026-02-06T09:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+    // Call 4: issues
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'iss-1', dealId: 'd-2', companyId: 'co-2', createdAt: '2026-02-04T16:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+    // Call 5: fetch deals
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'd-1', name: 'Acme Deal', value: 50000, stage: 'stage-id-1', companyId: 'co-1', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-2', name: 'Globex Deal', value: 30000, stage: 'stage-id-2', companyId: 'co-2', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 2,
+      },
+    });
+    // Call 6: enrich companies (fetchCompaniesByIds)
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-1', name: 'Acme Corp', city: 'SF', country: 'US' },
+          { id: 'co-2', name: 'Globex Inc', city: 'NYC', country: 'US' },
+        ],
+      },
+    });
+
+    const result = await activeDealTools.zero_find_active_deals.handler({
+      since: '2026-02-03',
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Active Deals');
+    expect(text).toContain('2 deals');
+    expect(text).toContain('Acme Deal');
+    expect(text).toContain('Globex Deal');
+    // Acme Deal: 1 activity + 1 email + 1 meeting
+    expect(text).toContain('1 activity');
+    expect(text).toContain('1 email');
+    expect(text).toContain('1 meeting');
+    // Globex Deal: 1 activity + 1 Slack message
+    expect(text).toContain('1 Slack message');
+    expect(text).toContain('Acme Corp (SF, US)');
+    expect(text).toContain('Globex Inc (NYC, US)');
+    expect(result).not.toHaveProperty('isError');
+  });
+
+  it('returns empty message when no activity found', async () => {
+    // All 4 sources return empty
+    mockGet.mockResolvedValueOnce({ data: { data: [], total: 0 } });
+    mockGet.mockResolvedValueOnce({ data: { data: [], total: 0 } });
+    mockGet.mockResolvedValueOnce({ data: { data: [], total: 0 } });
+    mockGet.mockResolvedValueOnce({ data: { data: [], total: 0 } });
+
+    const result = await activeDealTools.zero_find_active_deals.handler({
+      since: '2026-02-03',
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('No deals found with activity since 2026-02-03');
+    expect(text).toContain('Sources checked');
+  });
+
+  it('handles source failures gracefully', async () => {
+    // activities succeeds
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'a-1', dealId: 'd-1', occurredAt: '2026-02-04T10:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+    // emailThreads fails
+    mockGet.mockRejectedValueOnce(new Error('API error'));
+    // calendarEvents fails
+    mockGet.mockRejectedValueOnce(new Error('API error'));
+    // issues fails
+    mockGet.mockRejectedValueOnce(new Error('API error'));
+    // fetch deals
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'd-1', name: 'Resilient Deal', value: 10000, stage: 'stage-id-1', companyId: 'co-1', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+    // enrich companies
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-1', name: 'Acme Corp' },
+        ],
+      },
+    });
+
+    const result = await activeDealTools.zero_find_active_deals.handler({
+      since: '2026-02-03',
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Resilient Deal');
+    expect(text).toContain('1 activity');
+    expect(result).not.toHaveProperty('isError');
   });
 });

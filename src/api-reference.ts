@@ -54,6 +54,10 @@ export const API_REFERENCE = {
       list: { path: '/api/comments', methods: ['GET', 'POST'] },
       single: { path: '/api/comments/{id}', methods: ['PATCH', 'DELETE'] },
     },
+    issues: {
+      list: { path: '/api/issues', methods: ['GET'] },
+      single: { path: '/api/issues/{id}', methods: ['GET'] },
+    },
     lists: {
       list: { path: '/api/lists', methods: ['GET'] },
       single: { path: '/api/lists/{id}', methods: ['GET'] },

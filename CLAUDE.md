@@ -33,7 +33,9 @@ src/
     email-threads.ts    # Email thread read-only (list, get)
     calendar-events.ts  # Calendar event read-only (list, get)
     comments.ts         # Comment CRUD
+    issues.ts           # Issue read-only (list, get) — Slack messages via Pylon/Plain
     lists.ts            # List read-only (list, get)
+    active-deals.ts     # Composite: find deals with recent activity across all sources
   __tests__/
     tools.test.ts       # Integration tests with mocked HTTP
 ```
@@ -53,6 +55,12 @@ src/
 **Response shape:** Get endpoints may wrap in `{ data: entity }` — use `response.data.data || response.data` defensively.
 
 **Deal enrichment:** Deals auto-resolve stage IDs to names via cached pipeline stages. Company location is enriched via a secondary `fetchCompaniesByIds()` call unless `include` already contains `"company"`.
+
+**Entity associations:** Activities, email threads, calendar events, and issues all expose `dealId`, `companyId`, `contactId` in their output. This enables correlation back to deals/companies/contacts.
+
+**Composite tools:** `zero_find_active_deals` queries all activity sources (activities, emailThreads, calendarEvents, issues) in parallel with a date filter, collects dealIds, and returns enriched deals with per-deal activity summary. Handles source failures gracefully.
+
+**Issues:** Slack messages synced via Pylon/Plain are exposed as "issues" (`/api/issues`). The Issue entity has title, description, status, priority, source, and entity association fields.
 
 **Legacy params:** `includeCompany` (contacts) and `includeRelations` (deals) still work when `include` is absent. When `include` is provided, it supersedes them.
 

@@ -4,7 +4,7 @@ import { Activity, ApiListResponse } from '../types.js';
 
 export const activityTools = {
   zero_list_activities: {
-    description: 'List activities in Zero CRM with optional filtering and pagination. Filter examples: {"type": "call"}, {"companyId": "uuid"}, {"contactId": "uuid"}, {"dealId": "uuid"}.',
+    description: 'List activities (LinkedIn messages, custom activities, etc.) in Zero CRM. Each activity has dealId, companyId, contactId fields for entity association. To find deals with recent activity, filter by date and collect the dealId values. Filter examples: {"type": "call"}, {"dealId": "uuid"}, {"companyId": "uuid"}, {"occurredAt": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"type": "call"}, {"companyId": "uuid"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
@@ -47,6 +47,9 @@ export const activityTools = {
 ${activities.map((a, i) => `### ${i + 1}. [${a.type || 'unknown'}] ${a.description || 'N/A'}
 - **ID:** ${a.id}
 - **Occurred:** ${a.occurredAt ? new Date(a.occurredAt).toLocaleString() : 'N/A'}
+${a.dealId ? `- **Deal ID:** ${a.dealId}` : ''}
+${a.companyId ? `- **Company ID:** ${a.companyId}` : ''}
+${a.contactId ? `- **Contact ID:** ${a.contactId}` : ''}
 `).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -91,6 +94,11 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Type:** ${activity.type || 'N/A'}
 **Description:** ${activity.description || 'N/A'}
 **Occurred:** ${activity.occurredAt ? new Date(activity.occurredAt).toLocaleString() : 'N/A'}
+
+### Associations
+${activity.dealId ? `- **Deal ID:** ${activity.dealId}` : '- **Deal:** None'}
+${activity.companyId ? `- **Company ID:** ${activity.companyId}` : '- **Company:** None'}
+${activity.contactId ? `- **Contact ID:** ${activity.contactId}` : '- **Contact:** None'}
 
 ### Timestamps
 - **Created:** ${new Date(activity.createdAt).toLocaleString()}

@@ -185,6 +185,23 @@ export interface Comment {
   updatedAt: string;
 }
 
+export interface Issue {
+  id: string;
+  workspaceId: string;
+  title?: string;
+  description?: string | Record<string, unknown>;
+  status?: string;
+  priority?: string;
+  source?: string;
+  companyId?: string;
+  contactId?: string;
+  dealId?: string;
+  assigneeIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
 export interface List {
   id: string;
   workspaceId: string;
