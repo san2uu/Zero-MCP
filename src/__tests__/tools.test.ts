@@ -940,7 +940,7 @@ describe('zero_list_calendar_events', () => {
     const result = await calendarEventTools.zero_list_calendar_events.handler({});
     const text = result.content[0].text;
 
-    expect(text).toContain('Calendar Events (1 of 1)');
+    expect(text).toContain('Calendar Events (1)');
     expect(text).toContain('Team standup');
     expect(text).toContain('Zoom');
     expect(result).not.toHaveProperty('isError');
@@ -949,6 +949,9 @@ describe('zero_list_calendar_events', () => {
     const callParams = mockGet.mock.calls[0][1].params;
     const where = JSON.parse(callParams.where);
     expect(where.startTime).toEqual({ $gte: '2000-01-01' });
+
+    // Default dedup over-fetches: limit*2 = 40
+    expect(callParams.limit).toBe('40');
   });
 
   it('does not inject startTime filter when excludeNullDates is false', async () => {
@@ -1779,9 +1782,9 @@ describe('zero_list_calendar_events — deduplication', () => {
     });
     const text = result.content[0].text;
 
-    // Should show 2 unique, 1 duplicate removed
-    expect(text).toContain('2 unique');
-    expect(text).toContain('1 duplicates removed');
+    // Should show 2 events with dedup note
+    expect(text).toContain('Calendar Events (2');
+    expect(text).toContain('1 duplicates merged');
     // Should have merged contact/company/deal IDs
     expect(text).toContain('ct-1');
     expect(text).toContain('ct-2');
@@ -1821,8 +1824,91 @@ describe('zero_list_calendar_events — deduplication', () => {
 
     // Should show both events without dedup
     expect(text).toContain('Calendar Events (2');
-    expect(text).not.toContain('unique');
-    expect(text).not.toContain('duplicates removed');
+    expect(text).not.toContain('duplicates merged');
+
+    // When dedup is disabled, exact limit is used (no over-fetch)
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.limit).toBe('20');
+  });
+
+  it('over-fetches limit*2 and trims results after dedup', async () => {
+    // User requests limit=2, so API fetches 4 (limit*2)
+    // API returns 4 events: 2 duplicates of "Meeting A" + 2 duplicates of "Meeting B" + we want to see the trim
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ev-1', name: 'Meeting A', startTime: '2026-02-05T14:00:00Z', contactIds: ['ct-1'], companyIds: [], dealIds: [], userIds: [], createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z' },
+          { id: 'ev-2', name: 'Meeting A', startTime: '2026-02-05T14:00:00Z', contactIds: ['ct-2'], companyIds: [], dealIds: [], userIds: [], createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z' },
+          { id: 'ev-3', name: 'Meeting B', startTime: '2026-02-06T10:00:00Z', contactIds: [], companyIds: [], dealIds: [], userIds: [], createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z' },
+          { id: 'ev-4', name: 'Meeting C', startTime: '2026-02-07T10:00:00Z', contactIds: [], companyIds: [], dealIds: [], userIds: [], createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z' },
+        ],
+        total: 10,
+        limit: 4,
+        offset: 0,
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      limit: 2,
+    });
+    const text = result.content[0].text;
+
+    // API should have been called with limit=4 (2*2)
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.limit).toBe('4');
+
+    // After dedup: Meeting A (merged), Meeting B, Meeting C = 3 unique, trimmed to 2
+    expect(text).toContain('Calendar Events (2');
+    expect(text).toContain('1 duplicates merged');
+    expect(text).toContain('Meeting A');
+    expect(text).toContain('Meeting B');
+    expect(text).not.toContain('Meeting C');
+
+    // hasMore should be true (trimmed + more in API)
+    expect(text).toContain('More results available');
+  });
+});
+
+// ─── 43. Email-only contact display in relations ──────────────────────────────
+
+describe('formatIncludedRelations — email-only contacts', () => {
+  it('renders email-only contacts as "email (unresolved attendee)"', async () => {
+    // Calendar event with include contacts via fallback
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'External meeting', startTime: '2024-06-15T09:00:00Z',
+            contactIds: ['ct-1', 'ct-2'], companyIds: [],
+            createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z',
+          },
+        ],
+        total: 1,
+        limit: 40,
+        offset: 0,
+      },
+    });
+    // Resolve contacts: one with name, one email-only
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
+          { id: 'ct-2', firstName: '', lastName: '', email: 'external@partner.com', title: '' },
+        ],
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({ include: ['contacts'] });
+    const text = result.content[0].text;
+
+    // Named contact renders normally
+    expect(text).toContain('Jane Doe');
+    expect(text).toContain('jane@acme.com');
+    // Email-only contact renders with unresolved attendee label
+    expect(text).toContain('external@partner.com (unresolved attendee)');
+    // Should NOT have leading whitespace before the dash
+    expect(text).not.toContain('  — external@partner.com');
   });
 });
 

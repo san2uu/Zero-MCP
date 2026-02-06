@@ -5,7 +5,7 @@ import { buildIncludeFields, formatIncludedRelations } from '../services/relatio
 
 export const contactTools = {
   zero_list_contacts: {
-    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}). Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]).',
+    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}). Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]). Tip: To find contacts with recent meetings, first use zero_list_calendar_events with a date filter and include: ["contacts"], then use zero_resolve_contacts to get full details.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
@@ -252,7 +252,7 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
   },
 
   zero_resolve_contacts: {
-    description: 'Resolve multiple contacts by their IDs in a single call. Useful for bulk-resolving contact IDs from calendar events, email threads, etc. Returns contact details for all found IDs. Some IDs may not resolve (e.g., internal workspace members).',
+    description: 'Resolve multiple contacts by their IDs in a single call. Useful for bulk-resolving contact IDs from calendar events, email threads, etc. Returns contact details for all found IDs. Some IDs may not resolve (e.g., internal workspace members). Note: Some contact IDs from calendar events may resolve to email-only records (no name) if the attendee hasn\'t been fully enriched in the CRM.',
     inputSchema: z.object({
       ids: z.array(z.string()).describe('Array of contact IDs to resolve'),
       fields: z.string().optional().describe('Comma-separated fields to include'),

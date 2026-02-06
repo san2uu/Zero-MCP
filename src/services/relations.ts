@@ -99,7 +99,13 @@ export function formatIncludedRelations(entityType: EntityType, record: Record<s
 
     switch (name) {
       case 'contacts':
-        itemLines = items.map((c) => `- ${c.firstName || ''} ${c.lastName || ''} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}`);
+        itemLines = items.map((c) => {
+          const hasName = c.firstName || c.lastName;
+          if (hasName) {
+            return `- ${c.firstName || ''} ${c.lastName || ''} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}`;
+          }
+          return `- ${c.email || 'N/A'} (unresolved attendee)`;
+        });
         break;
       case 'companies':
         itemLines = items.map((c) => `- **${c.name || 'N/A'}**${c.domain ? ` (${c.domain})` : ''}`);

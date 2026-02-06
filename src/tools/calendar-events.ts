@@ -109,7 +109,7 @@ async function resolveCalendarEventIncludes(
 
 export const calendarEventTools = {
   zero_list_calendar_events: {
-    description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Date range filter: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}. Single-bound filter: {"startTime": {"$gte": "2026-02-03"}}. By default, events with no start time are excluded (set excludeNullDates: false to include them).',
+    description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Date range filter: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}. Single-bound filter: {"startTime": {"$gte": "2026-02-03"}}. By default, events with no start time are excluded (set excludeNullDates: false to include them). Tip: To find contacts you met this week, use where: {"startTime": {"$between": [...]}} with include: ["contacts"].',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions. Array fields use $contains: {"contactIds": {"$contains": "uuid"}}. Date ranges use $between: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
@@ -143,11 +143,18 @@ export const calendarEventTools = {
           fields = buildIncludeFields('calendarEvent', args.include, fields);
         }
 
+        const limit = args.limit || 20;
+        const offset = args.offset || 0;
+        const dedupEnabled = args.deduplicate !== false;
+
+        // When dedup is enabled, over-fetch to compensate for duplicates being merged
+        const fetchLimit = dedupEnabled ? limit * 2 : limit;
+
         const params = buildQueryParams({
           workspaceId,
           where,
-          limit: args.limit || 20,
-          offset: args.offset || 0,
+          limit: fetchLimit,
+          offset,
           orderBy: args.orderBy,
           fields,
         });
@@ -164,15 +171,21 @@ export const calendarEventTools = {
         // Deduplicate events if enabled (default: true)
         let displayEvents = events;
         let duplicatesRemoved = 0;
-        if (args.deduplicate !== false && events.length > 0) {
+        if (dedupEnabled && events.length > 0) {
           const dedupResult = deduplicateCalendarEvents(events);
           displayEvents = dedupResult.events;
           duplicatesRemoved = dedupResult.duplicatesRemoved;
         }
 
-        const limit = args.limit || 20;
-        const offset = args.offset || 0;
-        const hasMore = total ? offset + events.length < total : events.length === limit;
+        // Trim to user's requested limit after dedup
+        const trimmed = displayEvents.length > limit;
+        if (trimmed) {
+          displayEvents = displayEvents.slice(0, limit);
+        }
+
+        const hasMore = dedupEnabled
+          ? (total ? offset + events.length < total : events.length === fetchLimit) || trimmed
+          : (total ? offset + events.length < total : events.length === limit);
 
         if (displayEvents.length === 0) {
           return {
@@ -183,8 +196,8 @@ export const calendarEventTools = {
           };
         }
 
-        const dedupNote = duplicatesRemoved > 0 ? ` (${displayEvents.length} unique, ${duplicatesRemoved} duplicates removed)` : '';
-        const markdown = `## Calendar Events (${displayEvents.length}${total ? ` of ${total}` : ''}${dedupNote})
+        const dedupNote = duplicatesRemoved > 0 ? ` (${duplicatesRemoved} duplicates merged)` : '';
+        const markdown = `## Calendar Events (${displayEvents.length}${dedupNote})
 
 ${displayEvents.map((ev, i) => {
   const start = ev.startTime ? new Date(ev.startTime).toLocaleString() : 'N/A';
