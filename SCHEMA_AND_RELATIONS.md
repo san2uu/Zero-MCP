@@ -1,0 +1,904 @@
+### activities
+
+- id (uuid, nullable)
+- workspaceId (uuid, nullable)
+- type (text, nullable)
+- companyIds (uuid[], nullable)
+- contactIds (uuid[], nullable)
+- time (timestamp, nullable)
+- name (text, nullable)
+- data (jsonb, nullable)
+- calendarEventId (uuid, nullable)
+- emailThreadId (uuid, nullable)
+- linkedinMessageThreadId (uuid, nullable)
+- linkedinConnectionId (uuid, nullable)
+- createdAt (timestamp, nullable)
+- updatedAt (timestamp, nullable)
+- archived (boolean, nullable)
+- belongsTo calendarEvent -> calendarEvents
+- belongsTo emailThread -> emailThreads
+- belongsTo linkedinMessageThread -> linkedinMessageThreads
+- belongsTo linkedinConnection -> linkedinConnections
+
+### calendarEvents
+
+- id (uuid)
+- workspaceId (uuid)
+- userIds (uuid[])
+- calendarIds (uuid[])
+- externalId (text, nullable)
+- iCalUID (text, nullable)
+- externalRecurringEventId (text, nullable)
+- name (text, nullable)
+- emoji (text, nullable)
+- tags (uuid[], nullable)
+- description (text, nullable)
+- location (text, nullable)
+- meetingLink (text, nullable)
+- content (jsonb, nullable)
+- summary (jsonb, nullable)
+- organizer (jsonb, nullable)
+- attendees (jsonb[], nullable)
+- attendeeEmails (text[], nullable)
+- companyIds (uuid[])
+- contactIds (uuid[])
+- dealIds (uuid[])
+- startDate (date, nullable)
+- endDate (date, nullable)
+- startTime (timestamp, nullable)
+- endTime (timestamp, nullable)
+- busy (boolean)
+- remindAt (jsonb)
+- embedding (vector, nullable)
+- public (boolean)
+- integrationId (uuid, nullable)
+- externalNotetakerId (text, nullable)
+- externalNotetakerUrl (text, nullable)
+- audioUrl (text, nullable)
+- videoUrl (text, nullable)
+- shouldGenerateMeetingPrep (jsonb)
+- generatedMeetingPrep (jsonb)
+- shouldGenerateFollowups (jsonb)
+- generatedFollowups (jsonb)
+- recordingData (jsonb)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- belongsTo workspace -> workspaces
+- belongsToMany users -> users
+- belongsToMany calendars -> calendars
+- belongsToMany contacts -> contacts
+- belongsToMany companies -> companies
+- hasMany tasks -> tasks
+- hasMany transcripts -> calendarEventTranscripts
+- hasOne followupEmailThread -> emailThreads
+
+### calendarEventTranscripts
+
+- id (uuid)
+- workspaceId (uuid)
+- calendarEventId (uuid)
+- integrationId (uuid, nullable)
+- speaker (text, nullable)
+- startTime (integer, nullable)
+- endTime (integer, nullable)
+- duration (integer, nullable)
+- content (text, nullable)
+- topic (text, nullable)
+- sentiment (text, nullable)
+- createdAt (timestamp)
+- createdById (uuid, nullable)
+- updatedAt (timestamp)
+- updatedById (uuid, nullable)
+- archived (boolean)
+- archivedAt (timestamp, nullable)
+- archivedById (uuid, nullable)
+
+### columns
+
+- id (uuid)
+- workspaceId (uuid)
+- entity (enum)
+- key (text, nullable)
+- name (text, nullable)
+- description (text, nullable)
+- type (enum)
+- options (jsonb[], nullable)
+- settings (jsonb)
+- ai (boolean)
+- aiSettings (jsonb)
+- aiPrompt (jsonb, nullable)
+- aiTriggers (text[], nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- source (text, nullable)
+- externalId (text, nullable)
+- importId (uuid, nullable)
+- aiContextIds (uuid[], nullable)
+
+### commentReplies
+
+- id (uuid)
+- workspaceId (uuid)
+- userId (uuid, nullable)
+- replyToId (uuid)
+- content (jsonb)
+- reactions (jsonb)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- belongsTo user -> users
+
+### comments
+
+- id (uuid)
+- workspaceId (uuid)
+- userId (uuid, nullable)
+- companyId (uuid, nullable)
+- contactId (uuid, nullable)
+- dealId (uuid, nullable)
+- content (jsonb)
+- reactions (jsonb)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- automationId (uuid, nullable)
+- externalUser (jsonb, nullable)
+- belongsTo user -> users
+- belongsTo company -> companies
+- belongsTo contact -> contacts
+- belongsTo deal -> deals
+- hasMany replies -> commentReplies
+- belongsTo automation -> automations
+
+### companies
+
+- id (uuid)
+- workspaceId (uuid)
+- listIds (uuid[])
+- ownerIds (uuid[])
+- name (text, nullable)
+- domain (text, nullable)
+- logo (text, nullable)
+- description (text, nullable)
+- location (jsonb, nullable)
+- custom (jsonb)
+- addedToListAt (jsonb)
+- addedToListById (jsonb)
+- loading (text[], nullable)
+- linkedin (text, nullable)
+- externalId (text, nullable)
+- importId (uuid, nullable)
+- content (jsonb)
+- order (integer, nullable)
+- source (text, nullable)
+- mergedToId (uuid, nullable)
+- mergedAt (timestamp, nullable)
+- externalOwners (jsonb[], nullable)
+- parentCompanyId (uuid, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- belongsTo workspace -> workspaces
+- belongsToMany lists -> lists
+- hasMany listRecords -> listRecords
+- belongsToMany owners -> users
+- hasMany tasks -> tasks
+- hasMany openTasks -> tasks
+- hasMany comments -> comments
+- hasMany contacts -> contacts
+- hasMany deals -> deals
+- hasMany notes -> notes
+- hasMany files -> files
+- hasMany emailThreads -> emailThreads
+- hasMany calendarEvents -> calendarEvents
+- hasMany linkedinMessageThreads -> linkedinMessageThreads
+- hasMany linkedinConnections -> linkedinConnections
+- belongsTo parentCompany -> companies
+- hasMany childCompanies -> companies
+- hasMany activities -> activities
+- hasMany customActivities -> customActivities
+- hasOne lastActivity -> activities
+- hasOne nextActivity -> activities
+- hasOne firstActivity -> activities
+- hasOne firstCalendarEvent -> calendarEvents
+- hasOne lastCalendarEvent -> calendarEvents
+- hasOne nextCalendarEvent -> calendarEvents
+- hasOne firstEmailThread -> emailThreads
+- hasOne lastEmailThread -> emailThreads
+- hasOne companyProfile -> companyProfiles
+- hasMany analyticsEvents -> analyticsEvents
+- hasMany analyticsEventsByDate -> analyticsEvents
+- hasMany invoices -> invoices
+- hasMany paidInvoices -> invoices
+- hasMany openInvoices -> invoices
+- hasMany lateInvoices -> invoices
+- hasMany invoicesByMonth -> invoices
+- hasOne lastInvoice -> invoices
+- hasMany issues -> issues
+- hasMany issuesByMonth -> issues
+- hasMany openIssues -> issues
+- hasMany closedIssues -> issues
+- hasMany issuesStats -> issues
+- hasMany openIssuesStats -> issues
+- hasMany totalDeals -> deals
+- hasMany totalWonDeals -> deals
+
+### contacts
+
+- id (uuid)
+- workspaceId (uuid)
+- listIds (uuid[])
+- ownerIds (uuid[])
+- companyId (uuid, nullable)
+- name (text, nullable)
+- email (text, nullable)
+- emailVerified (boolean, nullable)
+- emailVerifiedAt (timestamp, nullable)
+- title (text, nullable)
+- location (jsonb, nullable)
+- avatar (text, nullable)
+- phone (text, nullable)
+- linkedin (text, nullable)
+- x (text, nullable)
+- facebook (text, nullable)
+- github (text, nullable)
+- type (text, nullable)
+- custom (jsonb)
+- addedToListAt (jsonb)
+- addedToListById (jsonb)
+- rocketReachId (integer, nullable)
+- loading (text[], nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- externalId (text, nullable)
+- importId (uuid, nullable)
+- content (jsonb)
+- order (integer, nullable)
+- source (text, nullable)
+- mergedToId (uuid, nullable)
+- mergedAt (timestamp, nullable)
+- externalOwners (jsonb[], nullable)
+- belongsTo workspace -> workspaces
+- belongsTo company -> companies
+- hasMany deals -> deals
+- hasMany notes -> notes
+- hasMany files -> files
+- belongsToMany lists -> lists
+- hasMany listRecords -> listRecords
+- belongsToMany owners -> users
+- hasMany tasks -> tasks
+- hasMany openTasks -> tasks
+- hasMany comments -> comments
+- hasMany emailThreads -> emailThreads
+- hasMany calendarEvents -> calendarEvents
+- hasMany linkedinMessageThreads -> linkedinMessageThreads
+- hasMany linkedinConnections -> linkedinConnections
+- hasMany activities -> activities
+- hasMany customActivities -> customActivities
+- hasOne lastActivity -> activities
+- hasOne nextActivity -> activities
+- hasOne firstActivity -> activities
+- hasOne firstCalendarEvent -> calendarEvents
+- hasOne lastCalendarEvent -> calendarEvents
+- hasOne nextCalendarEvent -> calendarEvents
+- hasOne firstEmailThread -> emailThreads
+- hasOne lastEmailThread -> emailThreads
+- hasOne contactProfile -> contactProfiles
+
+### customActivities
+
+- id (uuid)
+- workspaceId (uuid)
+- userId (uuid, nullable)
+- userIds (uuid[])
+- companyIds (uuid[])
+- contactIds (uuid[])
+- dealIds (uuid[])
+- name (text, nullable)
+- type (text, nullable)
+- time (timestamp, nullable)
+- content (jsonb)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- externalId (text, nullable)
+- source (text, nullable)
+- importId (text, nullable)
+- externalOwners (jsonb[], nullable)
+- belongsTo workspace -> workspaces
+- belongsTo user -> users
+- belongsToMany users -> users
+- belongsToMany companies -> companies
+- belongsToMany contacts -> contacts
+- belongsToMany deals -> deals
+
+### deals
+
+- id (uuid)
+- workspaceId (uuid)
+- listIds (uuid[])
+- ownerIds (uuid[])
+- companyId (uuid, nullable)
+- contactIds (uuid[])
+- name (text, nullable)
+- stage (text, nullable)
+- previousStages (text[], nullable)
+- stagesSince (jsonb)
+- stageDuration (jsonb)
+- value (numeric, nullable)
+- confidence (numeric, nullable)
+- closeDate (date, nullable)
+- startDate (date, nullable)
+- endDate (date, nullable)
+- custom (jsonb)
+- addedToListAt (jsonb)
+- addedToListById (jsonb)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- content (jsonb)
+- externalId (text, nullable)
+- importId (uuid, nullable)
+- previousStage (uuid, nullable)
+- stageSince (timestamp, nullable)
+- order (integer, nullable)
+- source (text, nullable)
+- externalOwners (jsonb[], nullable)
+- belongsTo workspace -> workspaces
+- belongsToMany lists -> lists
+- hasMany listRecords -> listRecords
+- belongsToMany owners -> users
+- belongsTo company -> companies
+- belongsToMany contacts -> contacts
+- belongsTo pipelineStage -> pipelineStages
+- hasMany notes -> notes
+- hasMany files -> files
+- hasMany activities -> activities
+- hasMany customActivities -> customActivities
+- hasOne lastActivity -> activities
+- hasOne nextActivity -> activities
+- hasOne firstActivity -> activities
+- hasOne firstCalendarEvent -> calendarEvents
+- hasOne lastCalendarEvent -> calendarEvents
+- hasOne nextCalendarEvent -> calendarEvents
+- hasOne firstEmailThread -> emailThreads
+- hasOne lastEmailThread -> emailThreads
+- hasMany tasks -> tasks
+- hasMany openTasks -> tasks
+- hasMany emailThreads -> emailThreads
+- hasMany calendarEvents -> calendarEvents
+- hasMany linkedinMessageThreads -> linkedinMessageThreads
+- belongsToMany linkedinConnections -> linkedinConnections
+- hasMany comments -> comments
+
+### emailAttachments
+
+- id (uuid)
+- workspaceId (uuid)
+- userId (uuid)
+- mailboxId (uuid)
+- emailId (uuid)
+- attachmentId (text)
+- type (text, nullable)
+- name (text, nullable)
+- size (integer)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- belongsTo email -> emails
+- belongsTo mailbox -> mailboxes
+
+### emailThreads
+
+- id (uuid)
+- workspaceId (uuid)
+- userIds (uuid[])
+- mailboxIds (uuid[])
+- externalThreadIds (text[])
+- calendarEventId (uuid, nullable)
+- subject (text, nullable)
+- snippet (text, nullable)
+- labels (jsonb)
+- tags (uuid[], nullable)
+- category (text, nullable)
+- companyIds (uuid[])
+- contactIds (uuid[])
+- dealIds (uuid[])
+- participants (jsonb[], nullable)
+- participantEmails (text[], nullable)
+- from (jsonb[], nullable)
+- fromEmails (text[], nullable)
+- fromCount (integer, nullable)
+- lastEmailTime (timestamp, nullable)
+- remindAt (jsonb)
+- draft (boolean)
+- spam (boolean)
+- hidden (boolean)
+- embedding (vector, nullable)
+- public (boolean)
+- automationId (uuid, nullable)
+- automationRunId (uuid, nullable)
+- automationActionId (uuid, nullable)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- belongsTo workspace -> workspaces
+- belongsToMany users -> users
+- belongsToMany mailboxes -> mailboxes
+- belongsToMany contacts -> contacts
+- belongsToMany companies -> companies
+- hasMany emails -> emails
+- hasOne firstEmail -> emails
+- hasOne lastEmail -> emails
+- belongsTo automation -> automations
+- belongsTo automationRun -> automationRuns
+- belongsTo automationAction -> automationActions
+
+### emails
+
+- id (uuid)
+- workspaceId (uuid)
+- userIds (uuid[])
+- mailboxIds (uuid[])
+- emailThreadId (uuid, nullable)
+- externalMessageIds (text[])
+- externalHistoryId (text, nullable)
+- subject (text, nullable)
+- snippet (text, nullable)
+- labels (jsonb)
+- from (jsonb, nullable)
+- to (jsonb[], nullable)
+- cc (jsonb[], nullable)
+- bcc (jsonb[], nullable)
+- fromEmail (text, nullable)
+- toEmails (text[], nullable)
+- participantEmails (text[], nullable)
+- messageId (text, nullable)
+- inReplyTo (text, nullable)
+- time (timestamp, nullable)
+- content (jsonb)
+- attachments (jsonb[], nullable)
+- draft (boolean)
+- spam (boolean)
+- public (boolean)
+- automationId (uuid, nullable)
+- automationRunId (uuid, nullable)
+- automationActionId (uuid, nullable)
+- tags (uuid[], nullable)
+- plain (text, nullable)
+- html (text, nullable)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- belongsTo workspace -> workspaces
+- belongsToMany users -> users
+- belongsToMany mailboxes -> mailboxes
+- belongsTo emailThread -> emailThreads
+- hasMany emailAttachments -> emailAttachments
+- belongsToMany contacts -> contacts
+
+### files
+
+- id (uuid)
+- workspaceId (uuid)
+- companyId (uuid, nullable)
+- contactId (uuid, nullable)
+- dealId (uuid, nullable)
+- assetId (text, nullable)
+- publicId (text, nullable)
+- googleCloudStorageId (text, nullable)
+- url (text, nullable)
+- thumbnailUrl (text, nullable)
+- previewUrl (text, nullable)
+- name (text, nullable)
+- description (text, nullable)
+- size (integer, nullable)
+- type (text, nullable)
+- metadata (jsonb, nullable)
+- externalId (text, nullable)
+- importId (uuid, nullable)
+- createdAt (timestamp)
+- createdById (uuid, nullable)
+- updatedAt (timestamp)
+- updatedById (uuid, nullable)
+- archived (boolean)
+- archivedById (uuid, nullable)
+
+### invoices
+
+- id (uuid)
+- workspaceId (uuid)
+- stripeIntegrationId (uuid, nullable)
+- companyId (uuid, nullable)
+- contactId (uuid, nullable)
+- externalId (text)
+- type (text, nullable)
+- status (text, nullable)
+- totalAmount (numeric, nullable)
+- totalAmountInWorkspaceCurrency (numeric, nullable)
+- taxAmount (numeric, nullable)
+- paidAmount (numeric, nullable)
+- remainingAmount (numeric, nullable)
+- currency (text, nullable)
+- date (date, nullable)
+- dueAt (date, nullable)
+- email (text, nullable)
+- customer (jsonb, nullable)
+- customerId (text, nullable)
+- subscriptionId (text, nullable)
+- invoiceNumber (text, nullable)
+- description (text, nullable)
+- invoiceUrl (text, nullable)
+- invoicePdfUrl (text, nullable)
+- lines (jsonb, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- belongsTo workspace -> workspaces
+- belongsTo stripeIntegration -> integrations
+- belongsTo company -> companies
+- belongsTo contact -> contacts
+- belongsTo createdBy -> users
+- belongsTo updatedBy -> users
+- belongsTo archivedBy -> users
+
+### issues
+
+- id (uuid)
+- workspaceId (uuid)
+- issueIntegrationId (uuid)
+- companyIds (uuid[], nullable)
+- contactIds (uuid[], nullable)
+- externalId (text)
+- issueNumber (text, nullable)
+- type (text, nullable)
+- status (text, nullable)
+- priority (integer, nullable)
+- labels (text[], nullable)
+- name (text, nullable)
+- description (text, nullable)
+- previewText (text, nullable)
+- link (text, nullable)
+- channel (text, nullable)
+- messages (jsonb[], nullable)
+- events (jsonb[], nullable)
+- time (timestamp, nullable)
+- responseTime (integer, nullable)
+- resolutionTime (integer, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- belongsTo workspace -> workspaces
+- belongsTo issueIntegration -> issueIntegrations
+- belongsToMany companies -> companies
+- belongsToMany contacts -> contacts
+- belongsTo createdBy -> users
+- belongsTo updatedBy -> users
+- belongsTo archivedBy -> users
+
+### linkedinConnections
+
+- id (uuid)
+- workspaceId (uuid)
+- userId (uuid)
+- companyId (uuid, nullable)
+- contactId (uuid, nullable)
+- linkedin (text)
+- message (text, nullable)
+- active (boolean)
+- sentAt (timestamp, nullable)
+- connectedAt (timestamp, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- belongsTo user -> users
+- belongsTo company -> companies
+- belongsTo contact -> contacts
+
+### linkedinMessages
+
+- id (uuid)
+- workspaceId (uuid)
+- userId (uuid)
+- threadId (uuid, nullable)
+- campaignId (uuid, nullable)
+- externalMessageId (text, nullable)
+- externalThreadId (text, nullable)
+- from (jsonb, nullable)
+- time (timestamp, nullable)
+- content (text, nullable)
+- attachments (jsonb[], nullable)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- public (boolean)
+- status (text)
+- belongsTo workspace -> workspaces
+- belongsTo user -> users
+- belongsTo thread -> linkedinMessageThreads
+- belongsTo campaign -> linkedinCampaigns
+
+### linkedinMessageThreads
+
+- id (uuid)
+- workspaceId (uuid)
+- userId (uuid)
+- campaignId (uuid, nullable)
+- externalThreadId (text, nullable)
+- snippet (text, nullable)
+- companyIds (uuid[])
+- contactIds (uuid[])
+- participants (jsonb[], nullable)
+- from (jsonb[], nullable)
+- messagesFrom (text[], nullable)
+- lastMessageTime (timestamp, nullable)
+- public (boolean)
+- remindAt (jsonb)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archived (boolean)
+- draft (boolean)
+- belongsTo workspace -> workspaces
+- belongsTo user -> users
+- belongsToMany contacts -> contacts
+- belongsToMany companies -> companies
+- hasMany messages -> linkedinMessages
+- hasOne lastMessage -> linkedinMessages
+- hasOne lastDraft -> linkedinMessages
+- hasOne firstMessage -> linkedinMessages
+- belongsTo campaign -> linkedinCampaigns
+
+### lists
+
+- id (uuid)
+- workspaceId (uuid)
+- name (text, nullable)
+- externalId (text, nullable)
+- source (text, nullable)
+- color (text, nullable)
+- icon (text, nullable)
+- entity (text, nullable)
+- filterBased (boolean)
+- filters (jsonb)
+- settings (jsonb)
+- order (integer, nullable)
+- listFolderId (uuid, nullable)
+- importId (uuid, nullable)
+- createdAt (timestamp)
+- createdById (uuid, nullable)
+- updatedAt (timestamp)
+- updatedById (uuid, nullable)
+- archived (boolean)
+- archivedById (uuid, nullable)
+- belongsTo workspace -> workspaces
+- hasMany companies -> companies
+- hasMany contacts -> contacts
+- hasMany views -> views
+- belongsTo listFolder -> listFolders
+
+### memberships
+
+- id (uuid)
+- userId (uuid)
+- workspaceId (uuid)
+- role (text)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- inviteMessage (text, nullable)
+- invitedById (uuid, nullable)
+- belongsTo user -> users
+- belongsTo workspace -> workspaces
+
+### notes
+
+- id (uuid)
+- workspaceId (uuid)
+- name (text, nullable)
+- emoji (text, nullable)
+- content (jsonb, nullable)
+- companyId (uuid, nullable)
+- contactId (uuid, nullable)
+- dealId (uuid, nullable)
+- embedding (vector, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- externalId (text, nullable)
+- source (text, nullable)
+- importId (text, nullable)
+- externalOwners (jsonb[], nullable)
+- belongsTo workspace -> workspaces
+- belongsTo company -> companies
+- belongsTo contact -> contacts
+- belongsTo deal -> deals
+
+### pipelineStages
+
+- id (uuid)
+- workspaceId (uuid)
+- name (text, nullable)
+- description (text, nullable)
+- type (text, nullable)
+- icon (text, nullable)
+- color (text, nullable)
+- settings (jsonb)
+- order (integer, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- confidence (numeric, nullable)
+- externalId (text, nullable)
+- source (text, nullable)
+- importId (uuid, nullable)
+- hasMany deals -> deals
+- hasMany previousDeals -> deals
+- hasMany lifetimeDeals -> deals
+
+### tasks
+
+- id (uuid)
+- workspaceId (uuid)
+- companyIds (uuid[])
+- contactIds (uuid[])
+- dealIds (uuid[])
+- assignedToIds (uuid[])
+- emailThreadId (uuid, nullable)
+- calendarEventId (uuid, nullable)
+- type (text, nullable)
+- name (text, nullable)
+- done (boolean)
+- deadline (timestamp, nullable)
+- remindAt (jsonb)
+- content (jsonb)
+- message (text, nullable)
+- order (integer, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- description (jsonb)
+- priority (integer, nullable)
+- integrationId (uuid, nullable)
+- externalId (text, nullable)
+- source (text, nullable)
+- importId (text, nullable)
+- externalOwners (jsonb[], nullable)
+- belongsTo workspace -> workspaces
+- belongsToMany companies -> companies
+- belongsToMany contacts -> contacts
+- belongsToMany deals -> deals
+- hasMany subtasks -> subtasks
+- belongsToMany assignedTo -> users
+
+### users
+
+- id (uuid)
+- name (text, nullable)
+- email (text, nullable)
+- title (text, nullable)
+- googleId (text, nullable)
+- avatar (text, nullable)
+- color (text, nullable)
+- settings (jsonb)
+- inviteToken (text, nullable)
+- inviteMessage (text, nullable)
+- invitedById (uuid, nullable)
+- active (boolean)
+- activatedAt (timestamp, nullable)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- invitedToWorkspaceId (uuid, nullable)
+- emailConfirmed (boolean)
+- featureFlags (jsonb)
+- lastSeenAt (timestamp, nullable)
+- linkedin (text, nullable)
+- linkedinUrn (text, nullable)
+- twoFactorAuthToken (text, nullable)
+- passwordResetAt (timestamp, nullable)
+- inviteExpiresAt (timestamp, nullable)
+- hasMany memberships -> memberships
+- hasMany sessions -> sessions
+- hasMany deals -> deals
+- hasMany tasks -> tasks
+- hasMany goals -> goals
+- belongsTo invitedBy -> users
+- hasMany mailboxes -> mailboxes
+- hasMany calendars -> calendars
+- belongsTo invitedToWorkspace -> workspaces
+- hasMany activity -> usersDailyUsage
+
+### workspaces
+
+- id (uuid)
+- name (text, nullable)
+- key (text)
+- domain (text, nullable)
+- avatar (text, nullable)
+- color (text, nullable)
+- settings (jsonb)
+- archived (boolean)
+- createdAt (timestamp)
+- updatedAt (timestamp)
+- archivedAt (timestamp, nullable)
+- createdById (uuid, nullable)
+- updatedById (uuid, nullable)
+- archivedById (uuid, nullable)
+- featureFlags (jsonb)
+- domains (jsonb[], nullable)
+- type (text, nullable)
+- trialEndsAt (timestamp, nullable)
+- hasMany memberships -> memberships
+- hasMany lists -> lists
+- hasMany listFolders -> listFolders
+- hasMany automations -> automations
+- hasMany automationFolders -> automationFolders
+- hasMany columns -> columns
+- hasMany recordViews -> recordViews
+- hasMany aiColumnRuns -> aiColumnRuns
+- hasMany automationRuns -> automationRuns
+- hasMany automationRunActions -> automationRunActions
+- hasMany snippets -> snippets
+- hasOne companyProfile -> companyProfiles
+- hasMany pipelineStages -> pipelineStages
+- hasMany mailboxes -> mailboxes
+- hasMany slackIntegrations -> slackIntegrations
+- hasMany analyticsIntegrations -> analyticsIntegrations
+- hasMany subscriptions -> subscriptions
+- hasMany activity -> usersDailyUsage
+- hasOne lastActivity -> usersDailyUsage

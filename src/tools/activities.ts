@@ -4,12 +4,12 @@ import { Activity, ApiListResponse } from '../types.js';
 
 export const activityTools = {
   zero_list_activities: {
-    description: 'List activities (LinkedIn messages, custom activities, etc.) in Zero CRM. Each activity has dealId, companyId, contactId fields for entity association. To find deals with recent activity, filter by date and collect the dealId values. Filter examples: {"type": "call"}, {"dealId": "uuid"}, {"companyId": "uuid"}, {"occurredAt": {"$gte": "2026-02-03"}}.',
+    description: 'List activities (LinkedIn messages, custom activities, etc.) in Zero CRM. Each activity has companyIds, contactIds fields for entity association. Filter examples: {"type": "call"}, {"time": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
-      where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"type": "call"}, {"companyId": "uuid"})'),
+      where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"type": "call"}, {"time": {"$gte": "2026-02-03"}})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
-      orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"occurredAt": "desc"})'),
+      orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"time": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string }) => {
@@ -44,12 +44,11 @@ export const activityTools = {
 
         const markdown = `## Activities (${activities.length}${total ? ` of ${total}` : ''})
 
-${activities.map((a, i) => `### ${i + 1}. [${a.type || 'unknown'}] ${a.description || 'N/A'}
+${activities.map((a, i) => `### ${i + 1}. [${a.type || 'unknown'}] ${a.name || 'N/A'}
 - **ID:** ${a.id}
-- **Occurred:** ${a.occurredAt ? new Date(a.occurredAt).toLocaleString() : 'N/A'}
-${a.dealId ? `- **Deal ID:** ${a.dealId}` : ''}
-${a.companyId ? `- **Company ID:** ${a.companyId}` : ''}
-${a.contactId ? `- **Contact ID:** ${a.contactId}` : ''}
+- **Time:** ${a.time ? new Date(a.time).toLocaleString() : 'N/A'}
+${a.companyIds?.length ? `- **Company IDs:** ${a.companyIds.join(', ')}` : ''}
+${a.contactIds?.length ? `- **Contact IDs:** ${a.contactIds.join(', ')}` : ''}
 `).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -92,13 +91,12 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 
 **ID:** ${activity.id}
 **Type:** ${activity.type || 'N/A'}
-**Description:** ${activity.description || 'N/A'}
-**Occurred:** ${activity.occurredAt ? new Date(activity.occurredAt).toLocaleString() : 'N/A'}
+**Name:** ${activity.name || 'N/A'}
+**Time:** ${activity.time ? new Date(activity.time).toLocaleString() : 'N/A'}
 
 ### Associations
-${activity.dealId ? `- **Deal ID:** ${activity.dealId}` : '- **Deal:** None'}
-${activity.companyId ? `- **Company ID:** ${activity.companyId}` : '- **Company:** None'}
-${activity.contactId ? `- **Contact ID:** ${activity.contactId}` : '- **Contact:** None'}
+${activity.companyIds?.length ? `- **Company IDs:** ${activity.companyIds.join(', ')}` : '- **Company:** None'}
+${activity.contactIds?.length ? `- **Contact IDs:** ${activity.contactIds.join(', ')}` : '- **Contact:** None'}
 
 ### Timestamps
 - **Created:** ${new Date(activity.createdAt).toLocaleString()}

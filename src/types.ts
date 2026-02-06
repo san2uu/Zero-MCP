@@ -133,11 +133,13 @@ export interface Activity {
   id: string;
   workspaceId: string;
   type?: string;
-  description?: string;
-  companyId?: string;
-  contactId?: string;
-  dealId?: string;
-  occurredAt?: string;
+  name?: string;
+  data?: Record<string, unknown>;
+  companyIds?: string[];
+  contactIds?: string[];
+  time?: string;
+  calendarEventId?: string;
+  emailThreadId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -147,12 +149,12 @@ export interface EmailThread {
   workspaceId: string;
   subject?: string;
   snippet?: string;
-  from?: string;
-  to?: string[];
-  companyId?: string;
-  contactId?: string;
-  dealId?: string;
-  lastMessageAt?: string;
+  from?: Record<string, unknown>[];
+  fromEmails?: string[];
+  companyIds?: string[];
+  contactIds?: string[];
+  dealIds?: string[];
+  lastEmailTime?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -4,12 +4,12 @@ import { EmailThread, ApiListResponse } from '../types.js';
 
 export const emailThreadTools = {
   zero_list_email_threads: {
-    description: 'List email threads in Zero CRM. Each thread has dealId, companyId, contactId fields for entity association. To find deals with recent emails, filter by lastMessageAt and collect dealId values. Filter examples: {"dealId": "uuid"}, {"companyId": "uuid"}, {"lastMessageAt": {"$gte": "2026-02-03"}}.',
+    description: 'List email threads in Zero CRM. Each thread has dealIds, companyIds, contactIds fields for entity association. To find deals with recent emails, filter by lastEmailTime and collect dealIds values. Filter examples: {"lastEmailTime": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
-      where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"companyId": "uuid"})'),
+      where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"lastEmailTime": {"$gte": "2026-02-03"}})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
-      orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"lastMessageAt": "desc"})'),
+      orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"lastEmailTime": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string }) => {
@@ -47,11 +47,11 @@ export const emailThreadTools = {
 ${threads.map((t, i) => `### ${i + 1}. ${t.subject || 'No subject'}
 - **ID:** ${t.id}
 - **Snippet:** ${t.snippet || 'N/A'}
-- **From:** ${t.from || 'N/A'}
-- **Last Message:** ${t.lastMessageAt ? new Date(t.lastMessageAt).toLocaleString() : 'N/A'}
-${t.dealId ? `- **Deal ID:** ${t.dealId}` : ''}
-${t.companyId ? `- **Company ID:** ${t.companyId}` : ''}
-${t.contactId ? `- **Contact ID:** ${t.contactId}` : ''}
+- **From:** ${t.fromEmails?.join(', ') || 'N/A'}
+- **Last Email:** ${t.lastEmailTime ? new Date(t.lastEmailTime).toLocaleString() : 'N/A'}
+${t.dealIds?.length ? `- **Deal IDs:** ${t.dealIds.join(', ')}` : ''}
+${t.companyIds?.length ? `- **Company IDs:** ${t.companyIds.join(', ')}` : ''}
+${t.contactIds?.length ? `- **Contact IDs:** ${t.contactIds.join(', ')}` : ''}
 `).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -93,15 +93,14 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         const markdown = `## ${thread.subject || 'No subject'}
 
 **ID:** ${thread.id}
-**From:** ${thread.from || 'N/A'}
-**To:** ${thread.to?.join(', ') || 'N/A'}
+**From:** ${thread.fromEmails?.join(', ') || 'N/A'}
 **Snippet:** ${thread.snippet || 'N/A'}
-**Last Message:** ${thread.lastMessageAt ? new Date(thread.lastMessageAt).toLocaleString() : 'N/A'}
+**Last Email:** ${thread.lastEmailTime ? new Date(thread.lastEmailTime).toLocaleString() : 'N/A'}
 
 ### Associations
-${thread.dealId ? `- **Deal ID:** ${thread.dealId}` : '- **Deal:** None'}
-${thread.companyId ? `- **Company ID:** ${thread.companyId}` : '- **Company:** None'}
-${thread.contactId ? `- **Contact ID:** ${thread.contactId}` : '- **Contact:** None'}
+${thread.dealIds?.length ? `- **Deal IDs:** ${thread.dealIds.join(', ')}` : '- **Deal:** None'}
+${thread.companyIds?.length ? `- **Company IDs:** ${thread.companyIds.join(', ')}` : '- **Company:** None'}
+${thread.contactIds?.length ? `- **Contact IDs:** ${thread.contactIds.join(', ')}` : '- **Contact:** None'}
 
 ### Timestamps
 - **Created:** ${new Date(thread.createdAt).toLocaleString()}

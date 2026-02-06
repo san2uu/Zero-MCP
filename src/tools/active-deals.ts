@@ -14,8 +14,8 @@ const SOURCES = ['activities', 'emailThreads', 'calendarEvents', 'issues'] as co
 type Source = typeof SOURCES[number];
 
 const SOURCE_DATE_FIELDS: Record<Source, string> = {
-  activities: 'occurredAt',
-  emailThreads: 'lastMessageAt',
+  activities: 'time',
+  emailThreads: 'lastEmailTime',
   calendarEvents: 'startTime',
   issues: 'createdAt',
 };
@@ -53,12 +53,16 @@ export const activeDealTools = {
             where[dateField] = { ...where[dateField] as Record<string, unknown>, $lt: args.until };
           }
 
+          // emailThreads and calendarEvents use dealIds (array); activities and issues have no direct deal link
+          const dealField = (source === 'emailThreads' || source === 'calendarEvents') ? 'dealIds' : '';
+          const fieldsList = ['id', dealField, 'companyIds', dateField].filter(Boolean).join(',');
+
           const params = buildQueryParams({
             workspaceId,
             where,
             limit: perSourceLimit,
             offset: 0,
-            fields: `id,dealId,companyId,${dateField}`,
+            fields: fieldsList,
           });
 
           try {
@@ -88,19 +92,25 @@ export const activeDealTools = {
           const dateField = SOURCE_DATE_FIELDS[result.source as Source];
           const key = summaryKey(result.source as Source);
           for (const item of result.data) {
-            if (!item.dealId) continue;
-            const existing = dealSummaries.get(item.dealId) || {
-              activities: 0,
-              emails: 0,
-              calendarEvents: 0,
-              issues: 0,
-            };
-            (existing[key] as number)++;
+            // emailThreads and calendarEvents use dealIds (array); others have no direct deal link
+            const itemDealIds: string[] = Array.isArray(item.dealIds)
+              ? item.dealIds as string[]
+              : item.dealId ? [item.dealId as string] : [];
+            if (itemDealIds.length === 0) continue;
             const itemDate = item[dateField] as string | undefined;
-            if (itemDate && (!existing.lastActivity || itemDate > existing.lastActivity)) {
-              existing.lastActivity = itemDate;
+            for (const dealId of itemDealIds) {
+              const existing = dealSummaries.get(dealId) || {
+                activities: 0,
+                emails: 0,
+                calendarEvents: 0,
+                issues: 0,
+              };
+              (existing[key] as number)++;
+              if (itemDate && (!existing.lastActivity || itemDate > existing.lastActivity)) {
+                existing.lastActivity = itemDate;
+              }
+              dealSummaries.set(dealId, existing);
             }
-            dealSummaries.set(item.dealId, existing);
           }
         }
 

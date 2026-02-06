@@ -10,9 +10,9 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     deals: 'deals.id,deals.name,deals.value,deals.stage,deals.closeDate',
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
     notes: 'notes.id,notes.content,notes.createdAt',
-    emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastMessageAt',
+    emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
     calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
-    activities: 'activities.id,activities.type,activities.description,activities.occurredAt',
+    activities: 'activities.id,activities.type,activities.name,activities.time',
     issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
   },
@@ -21,9 +21,9 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     deals: 'deals.id,deals.name,deals.value,deals.stage,deals.closeDate',
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
     notes: 'notes.id,notes.content,notes.createdAt',
-    emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastMessageAt',
+    emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
     calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
-    activities: 'activities.id,activities.type,activities.description,activities.occurredAt',
+    activities: 'activities.id,activities.type,activities.name,activities.time',
     issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
   },
@@ -32,9 +32,9 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     contacts: 'contacts.id,contacts.firstName,contacts.lastName,contacts.email,contacts.title',
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
     notes: 'notes.id,notes.content,notes.createdAt',
-    emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastMessageAt',
+    emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
     calendarEvents: 'calendarEvents.id,calendarEvents.title,calendarEvents.startTime,calendarEvents.endTime',
-    activities: 'activities.id,activities.type,activities.description,activities.occurredAt',
+    activities: 'activities.id,activities.type,activities.name,activities.time',
     issues: 'issues.id,issues.title,issues.status,issues.source,issues.createdAt',
     comments: 'comments.id,comments.content,comments.createdAt',
   },
@@ -113,7 +113,7 @@ export function formatIncludedRelations(entityType: EntityType, record: Record<s
         itemLines = items.map((n) => `- ${formatContent(n.content)} — ${n.createdAt ? new Date(n.createdAt as string).toLocaleDateString() : ''}`);
         break;
       case 'emailThreads':
-        itemLines = items.map((e) => `- **${e.subject || 'No subject'}** — ${e.snippet || ''}${e.lastMessageAt ? ` (${new Date(e.lastMessageAt as string).toLocaleDateString()})` : ''}`);
+        itemLines = items.map((e) => `- **${e.subject || 'No subject'}** — ${e.snippet || ''}${e.lastEmailTime ? ` (${new Date(e.lastEmailTime as string).toLocaleDateString()})` : ''}`);
         break;
       case 'calendarEvents':
         itemLines = items.map((ev) => {
@@ -123,7 +123,7 @@ export function formatIncludedRelations(entityType: EntityType, record: Record<s
         });
         break;
       case 'activities':
-        itemLines = items.map((a) => `- [${a.type || 'unknown'}] ${a.description || 'N/A'}${a.occurredAt ? ` (${new Date(a.occurredAt as string).toLocaleDateString()})` : ''}`);
+        itemLines = items.map((a) => `- [${a.type || 'unknown'}] ${a.name || 'N/A'}${a.time ? ` (${new Date(a.time as string).toLocaleDateString()})` : ''}`);
         break;
       case 'issues':
         itemLines = items.map((iss) => `- ${iss.title || 'Untitled'} — ${iss.status || 'N/A'}${iss.source ? ` (${iss.source})` : ''}${iss.createdAt ? ` — ${new Date(iss.createdAt as string).toLocaleDateString()}` : ''}`);

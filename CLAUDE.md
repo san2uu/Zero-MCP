@@ -56,9 +56,9 @@ src/
 
 **Deal enrichment:** Deals auto-resolve stage IDs to names via cached pipeline stages. Company location is enriched via a secondary `fetchCompaniesByIds()` call unless `include` already contains `"company"`.
 
-**Entity associations:** Activities, email threads, calendar events, and issues all expose `dealId`, `companyId`, `contactId` in their output. This enables correlation back to deals/companies/contacts.
+**Entity associations:** Email threads and calendar events use plural array fields (`dealIds`, `companyIds`, `contactIds`). Activities use `companyIds`/`contactIds` but have no direct deal link. Issues use `companyIds`/`contactIds` with no deal link. Always refer to `SCHEMA_AND_RELATIONS.md` for the canonical field names.
 
-**Composite tools:** `zero_find_active_deals` queries all activity sources (activities, emailThreads, calendarEvents, issues) in parallel with a date filter, collects dealIds, and returns enriched deals with per-deal activity summary. Handles source failures gracefully.
+**Composite tools:** `zero_find_active_deals` queries activity sources in parallel with a date filter. Only emailThreads and calendarEvents contribute direct deal associations (via `dealIds` arrays). Activities and issues are queried but cannot be correlated to deals directly. Handles source failures gracefully.
 
 **Issues:** Slack messages synced via Pylon/Plain are exposed as "issues" (`/api/issues`). The Issue entity has title, description, status, priority, source, and entity association fields.
 
