@@ -21,6 +21,20 @@ server.tool(
   workspaceTools.zero_get_workspace.handler
 );
 
+server.tool(
+  'zero_list_workspaces',
+  workspaceTools.zero_list_workspaces.description,
+  workspaceTools.zero_list_workspaces.inputSchema.shape,
+  workspaceTools.zero_list_workspaces.handler
+);
+
+server.tool(
+  'zero_switch_workspace',
+  workspaceTools.zero_switch_workspace.description,
+  workspaceTools.zero_switch_workspace.inputSchema.shape,
+  workspaceTools.zero_switch_workspace.handler
+);
+
 // Register company tools
 server.tool(
   'zero_list_companies',

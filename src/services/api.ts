@@ -89,6 +89,10 @@ export function formatApiError(error: unknown): string {
   return 'An unknown error occurred';
 }
 
+export function clearWorkspaceCaches(): void {
+  cachedPipelineStages = null;
+}
+
 export function setCachedPipelineStages(stages: Map<string, string>): void {
   cachedPipelineStages = stages;
 }
