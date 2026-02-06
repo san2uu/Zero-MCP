@@ -929,7 +929,7 @@ describe('zero_list_calendar_events', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ev-1', title: 'Team standup', startTime: '2024-06-15T09:00:00Z', endTime: '2024-06-15T09:30:00Z', location: 'Zoom', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'ev-1', name: 'Team standup', startTime: '2024-06-15T09:00:00Z', endTime: '2024-06-15T09:30:00Z', location: 'Zoom', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
         ],
         total: 1,
         limit: 20,
@@ -1210,11 +1210,11 @@ describe('zero_list_email_threads — entity associations', () => {
 // ─── 36. Calendar events show entity association IDs ─────────────────────────
 
 describe('zero_list_calendar_events — entity associations', () => {
-  it('shows dealId, companyId in output', async () => {
+  it('shows dealIds, companyIds in output', async () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ev-1', title: 'Call', startTime: '2024-06-15T09:00:00Z', endTime: '2024-06-15T09:30:00Z', location: 'Zoom', dealId: 'd-7', companyId: 'co-7', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'ev-1', name: 'Call', startTime: '2024-06-15T09:00:00Z', endTime: '2024-06-15T09:30:00Z', location: 'Zoom', dealIds: ['d-7'], companyIds: ['co-7'], userIds: ['u-1'], createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
         ],
         total: 1,
         limit: 20,
@@ -1225,10 +1225,12 @@ describe('zero_list_calendar_events — entity associations', () => {
     const result = await calendarEventTools.zero_list_calendar_events.handler({});
     const text = result.content[0].text;
 
-    expect(text).toContain('Deal ID:');
+    expect(text).toContain('Deal IDs:');
     expect(text).toContain('d-7');
-    expect(text).toContain('Company ID:');
+    expect(text).toContain('Company IDs:');
     expect(text).toContain('co-7');
+    expect(text).toContain('User IDs:');
+    expect(text).toContain('u-1');
   });
 });
 

@@ -162,14 +162,17 @@ export interface EmailThread {
 export interface CalendarEvent {
   id: string;
   workspaceId: string;
-  title?: string;
+  name?: string;
   description?: string;
   startTime?: string;
   endTime?: string;
   location?: string;
-  companyId?: string;
-  contactId?: string;
-  dealId?: string;
+  userIds?: string[];
+  attendees?: Record<string, unknown>[];
+  attendeeEmails?: string[];
+  companyIds?: string[];
+  contactIds?: string[];
+  dealIds?: string[];
   createdAt: string;
   updatedAt: string;
 }

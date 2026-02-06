@@ -4,9 +4,9 @@ import { CalendarEvent, ApiListResponse } from '../types.js';
 
 export const calendarEventTools = {
   zero_list_calendar_events: {
-    description: 'List calendar events (meetings) in Zero CRM. Each event has dealId, companyId, contactId fields for entity association. To find deals with recent meetings, filter by startTime and collect dealId values. Filter examples: {"dealId": "uuid"}, {"companyId": "uuid"}, {"startTime": {"$gte": "2026-02-03"}}.',
+    description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Other filter examples: {"startTime": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
-      where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"companyId": "uuid"})'),
+      where: z.record(z.unknown()).optional().describe('Filter conditions. Array fields use $contains: {"contactIds": {"$contains": "uuid"}}, {"companyIds": {"$contains": "uuid"}}'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"startTime": "asc"})'),
@@ -47,13 +47,14 @@ export const calendarEventTools = {
 ${events.map((ev, i) => {
   const start = ev.startTime ? new Date(ev.startTime).toLocaleString() : 'N/A';
   const end = ev.endTime ? new Date(ev.endTime).toLocaleString() : '';
-  return `### ${i + 1}. ${ev.title || 'Untitled'}
+  return `### ${i + 1}. ${ev.name || 'Untitled'}
 - **ID:** ${ev.id}
 - **When:** ${start}${end ? ` to ${end}` : ''}
 - **Location:** ${ev.location || 'N/A'}
-${ev.dealId ? `- **Deal ID:** ${ev.dealId}` : ''}
-${ev.companyId ? `- **Company ID:** ${ev.companyId}` : ''}
-${ev.contactId ? `- **Contact ID:** ${ev.contactId}` : ''}
+${ev.userIds?.length ? `- **User IDs:** ${ev.userIds.join(', ')}` : ''}
+${ev.dealIds?.length ? `- **Deal IDs:** ${ev.dealIds.join(', ')}` : ''}
+${ev.companyIds?.length ? `- **Company IDs:** ${ev.companyIds.join(', ')}` : ''}
+${ev.contactIds?.length ? `- **Contact IDs:** ${ev.contactIds.join(', ')}` : ''}
 `;
 }).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
@@ -96,7 +97,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         const start = event.startTime ? new Date(event.startTime).toLocaleString() : 'N/A';
         const end = event.endTime ? new Date(event.endTime).toLocaleString() : 'N/A';
 
-        const markdown = `## ${event.title || 'Untitled'}
+        const markdown = `## ${event.name || 'Untitled'}
 
 **ID:** ${event.id}
 **Start:** ${start}
@@ -104,10 +105,14 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Location:** ${event.location || 'N/A'}
 **Description:** ${event.description || 'N/A'}
 
+### Participants
+${event.userIds?.length ? `- **User IDs:** ${event.userIds.join(', ')}` : '- **Users:** None'}
+${event.attendeeEmails?.length ? `- **Attendee Emails:** ${event.attendeeEmails.join(', ')}` : ''}
+
 ### Associations
-${event.dealId ? `- **Deal ID:** ${event.dealId}` : '- **Deal:** None'}
-${event.companyId ? `- **Company ID:** ${event.companyId}` : '- **Company:** None'}
-${event.contactId ? `- **Contact ID:** ${event.contactId}` : '- **Contact:** None'}
+${event.dealIds?.length ? `- **Deal IDs:** ${event.dealIds.join(', ')}` : '- **Deals:** None'}
+${event.companyIds?.length ? `- **Company IDs:** ${event.companyIds.join(', ')}` : '- **Companies:** None'}
+${event.contactIds?.length ? `- **Contact IDs:** ${event.contactIds.join(', ')}` : '- **Contacts:** None'}
 
 ### Timestamps
 - **Created:** ${new Date(event.createdAt).toLocaleString()}
