@@ -314,7 +314,146 @@ describe('zero_create_contact', () => {
   });
 });
 
-// ─── 10. "No results found" ─────────────────────────────────────────────────
+// ─── 10. Cross-reference: "Find deals from European companies" ──────────────
+
+describe('cross-reference — deals by company location', () => {
+  it('step 1: list companies filtered by country', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-10', name: 'Berlin GmbH', domain: 'berlin.de', city: 'Berlin', country: 'Germany', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'co-11', name: 'Paris SAS', domain: 'paris.fr', city: 'Paris', country: 'France', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const where = { 'location.country': 'Germany' };
+    const result = await companyTools.zero_list_companies.handler({ where });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Berlin GmbH');
+    expect(result).not.toHaveProperty('isError');
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBe(JSON.stringify(where));
+  });
+
+  it('step 2: filter deals by companyId $in from matched companies', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'd-10', name: 'Berlin Deal', value: 50000, stage: 'stage-id-1', company: { id: 'co-10', name: 'Berlin GmbH', country: 'Germany', city: 'Berlin' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-11', name: 'Paris Deal', value: 30000, stage: 'stage-id-2', company: { id: 'co-11', name: 'Paris SAS', country: 'France', city: 'Paris' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const where = { companyId: { $in: ['co-10', 'co-11'] } };
+    const result = await dealTools.zero_list_deals.handler({ where });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Berlin Deal');
+    expect(text).toContain('Paris Deal');
+    expect(text).toContain('Berlin GmbH');
+    expect(text).toContain('Paris SAS');
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBe(JSON.stringify(where));
+  });
+});
+
+// ─── 11. Deal responses include company location ────────────────────────────
+
+describe('zero_list_deals — company location in output', () => {
+  it('shows company city and country in deal listing', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'd-20', name: 'Local Deal', value: 10000, stage: 'stage-id-1', company: { id: 'co-20', name: 'Tokyo Ltd', country: 'Japan', city: 'Tokyo' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-21', name: 'No Location Deal', value: 5000, stage: 'stage-id-2', company: { id: 'co-21', name: 'Mystery Co' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await dealTools.zero_list_deals.handler({});
+    const text = result.content[0].text;
+
+    // Company with location shows city, country
+    expect(text).toContain('Tokyo Ltd (Tokyo, Japan)');
+    // Company without location shows just the name
+    expect(text).toContain('Mystery Co');
+    expect(text).not.toContain('Mystery Co (');
+  });
+});
+
+// ─── 12. Get deal shows company location ────────────────────────────────────
+
+describe('zero_get_deal — company location in output', () => {
+  it('shows company location in single deal view', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: 'd-30',
+          name: 'London Deal',
+          value: 80000,
+          stage: 'stage-id-3',
+          confidence: '0.85',
+          closeDate: '2026-09-01T00:00:00Z',
+          company: { id: 'co-30', name: 'London Corp', country: 'United Kingdom', city: 'London' },
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-06-01T00:00:00Z',
+        },
+      },
+    });
+
+    const result = await dealTools.zero_get_deal.handler({ id: 'd-30' });
+    const text = result.content[0].text;
+
+    expect(text).toContain('London Corp');
+    expect(text).toContain('London, United Kingdom');
+    expect(text).toContain('Closed Won');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 13. Cross-reference: deals by stage + company location ─────────────────
+
+describe('cross-reference — deals by stage and company location', () => {
+  it('filters deals by both stage and companyId', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'd-40', name: 'Qualified EU Deal', value: 60000, stage: 'stage-id-2', company: { id: 'co-10', name: 'Berlin GmbH', country: 'Germany', city: 'Berlin' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const where = { stage: 'stage-id-2', companyId: { $in: ['co-10', 'co-11'] } };
+    const result = await dealTools.zero_list_deals.handler({ where });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Qualified EU Deal');
+    expect(text).toContain('Berlin GmbH (Berlin, Germany)');
+    expect(text).toContain('Qualification');
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBe(JSON.stringify(where));
+  });
+});
+
+// ─── 14. "No results found" ─────────────────────────────────────────────────
 
 describe('zero_list_deals — empty results', () => {
   it('returns "No deals found" message', async () => {
@@ -337,7 +476,7 @@ describe('zero_list_deals — empty results', () => {
   });
 });
 
-// ─── 11. "API returns an error" ─────────────────────────────────────────────
+// ─── 15. "API returns an error" ─────────────────────────────────────────────
 
 describe('zero_list_companies — API error', () => {
   it('returns isError with authentication message on 401', async () => {
