@@ -49,9 +49,7 @@ Replace `/path/to/zero-api` with the actual path and add your Zero API key.
 
 ### Getting Your Zero API Key
 
-1. Log into [Zero](https://zero.inc)
-2. Go to Settings > API
-3. Generate a new API key
+Request an API key from the Zero team. Self-service API key generation is not yet available.
 
 ## Available Tools
 
