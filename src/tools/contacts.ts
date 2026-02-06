@@ -4,9 +4,9 @@ import { Contact, ApiListResponse } from '../types.js';
 
 export const contactTools = {
   zero_list_contacts: {
-    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"contains": "@acme.com"}}).',
+    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}).',
     inputSchema: z.object({
-      where: z.record(z.unknown()).optional().describe('Filter conditions as JSON object'),
+      where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"lastName": "asc"})'),

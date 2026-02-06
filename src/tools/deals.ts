@@ -4,9 +4,9 @@ import { Deal, ApiListResponse } from '../types.js';
 
 export const dealTools = {
   zero_list_deals: {
-    description: 'List deals in Zero CRM with optional filtering and pagination. Stages are IDs, not names — use zero_list_pipeline_stages to look up stage IDs first. Filter example: {"stage": "<stage_id>"} or {"value": {"gte": 50000}}.',
+    description: 'List deals in Zero CRM with optional filtering and pagination. Stages are IDs, not names — use zero_list_pipeline_stages to look up stage IDs first. Filter examples: {"stage": "<stage_id>"}, {"value": {"$gte": 50000}}, {"value": {"$between": [1000, 5000]}}, {"closeDate:month": "2026-01"}, {"stage": {"$in": ["id1", "id2"]}}, {"ownerIds": {"$includes": "userId"}}.',
     inputSchema: z.object({
-      where: z.record(z.unknown()).optional().describe('Filter conditions as JSON object'),
+      where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"value": {"$gte": 50000}}, {"stage": {"$in": ["id1", "id2"]}}, {"closeDate:month": "2026-01"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"value": "desc"})'),

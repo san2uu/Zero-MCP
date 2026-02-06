@@ -89,12 +89,16 @@ Once configured, you can ask Claude:
 
 ### Filtering
 
-Tools support JSON `where` clauses:
+Tools support JSON `where` clauses with MongoDB-style `$`-prefixed operators:
 
 ```json
-{"name": {"contains": "Acme"}}
-{"value": {"gte": 50000}}
-{"stage": "negotiation"}
+{"name": {"$contains": "Acme"}}
+{"value": {"$gte": 50000}}
+{"value": {"$between": [1000, 5000]}}
+{"stage": {"$in": ["stage-id-1", "stage-id-2"]}}
+{"closeDate:month": "2026-01"}
+{"ownerIds": {"$includes": "user-id"}}
+{"location.city": "San Francisco"}
 ```
 
 ## Development

@@ -4,9 +4,9 @@ import { Company, ApiListResponse } from '../types.js';
 
 export const companyTools = {
   zero_list_companies: {
-    description: 'List companies in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"name": {"contains": "Acme"}}).',
+    description: 'List companies in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"name": {"$contains": "Acme"}}, {"location.city": "San Francisco"}, {"location.country": "United States"}).',
     inputSchema: z.object({
-      where: z.record(z.unknown()).optional().describe('Filter conditions as JSON object'),
+      where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"name": {"$contains": "Acme"}}, {"location.city": "San Francisco"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"createdAt": "desc"})'),
