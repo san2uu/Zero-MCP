@@ -33,6 +33,13 @@ import { companyTools } from '../tools/companies.js';
 import { contactTools } from '../tools/contacts.js';
 import { dealTools } from '../tools/deals.js';
 import { pipelineStageTools } from '../tools/pipeline-stages.js';
+import { taskTools } from '../tools/tasks.js';
+import { noteTools } from '../tools/notes.js';
+import { activityTools } from '../tools/activities.js';
+import { emailThreadTools } from '../tools/email-threads.js';
+import { calendarEventTools } from '../tools/calendar-events.js';
+import { commentTools } from '../tools/comments.js';
+import { listTools } from '../tools/lists.js';
 import { setCachedWorkspaceId, setCachedPipelineStages } from '../services/api.js';
 import { AxiosError } from 'axios';
 
@@ -549,5 +556,514 @@ describe('zero_list_companies — API error', () => {
     expect(text).toContain('Authentication failed');
     expect(text).toContain('ZERO_API_KEY');
     expect(result).toHaveProperty('isError', true);
+  });
+});
+
+// ─── 16. Relational queries: include tasks on companies ─────────────────────
+
+describe('zero_list_companies — include tasks', () => {
+  it('appends tasks.* fields and renders tasks in output', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'co-1', name: 'Acme Corp', domain: 'acme.com', industry: 'Tech', size: '100',
+            city: 'SF', state: 'CA', country: 'US',
+            createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+            tasks: [
+              { id: 't-1', name: 'Follow up', done: false, deadline: '2026-03-01T00:00:00Z' },
+              { id: 't-2', name: 'Send proposal', done: true },
+            ],
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await companyTools.zero_list_companies.handler({ include: ['tasks'] });
+    const text = result.content[0].text;
+
+    // Verify fields param includes tasks.*
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.fields).toContain('tasks.id');
+    expect(callParams.fields).toContain('tasks.name');
+    expect(callParams.fields).toContain('tasks.done');
+    expect(callParams.fields).toContain('tasks.deadline');
+
+    // Verify tasks are rendered in output
+    expect(text).toContain('Tasks (2)');
+    expect(text).toContain('[ ] Follow up');
+    expect(text).toContain('[x] Send proposal');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 17. Relational queries: include multiple relations on companies ────────
+
+describe('zero_list_companies — include contacts and deals', () => {
+  it('appends both contacts.* and deals.* fields', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'co-1', name: 'Acme Corp', domain: 'acme.com',
+            createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+            contacts: [
+              { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
+            ],
+            deals: [
+              { id: 'd-1', name: 'Big Deal', value: 50000, stage: 'stage-id-1', closeDate: '2026-06-01T00:00:00Z' },
+            ],
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await companyTools.zero_list_companies.handler({ include: ['contacts', 'deals'] });
+    const text = result.content[0].text;
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.fields).toContain('contacts.id');
+    expect(callParams.fields).toContain('deals.id');
+
+    expect(text).toContain('Contacts (1)');
+    expect(text).toContain('Jane Doe');
+    expect(text).toContain('Deals (1)');
+    expect(text).toContain('Big Deal');
+  });
+});
+
+// ─── 18. Relational queries: get company with include ───────────────────────
+
+describe('zero_get_company — include tasks and notes', () => {
+  it('includes tasks and notes in single company view', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        id: 'co-1', name: 'Acme Corp', domain: 'acme.com', industry: 'Tech',
+        createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+        tasks: [
+          { id: 't-1', name: 'Call client', done: false },
+        ],
+        notes: [
+          { id: 'n-1', content: 'Great meeting today', createdAt: '2024-06-15T00:00:00Z' },
+        ],
+      },
+    });
+
+    const result = await companyTools.zero_get_company.handler({ id: 'co-1', include: ['tasks', 'notes'] });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Tasks (1)');
+    expect(text).toContain('[ ] Call client');
+    expect(text).toContain('Notes (1)');
+    expect(text).toContain('Great meeting today');
+  });
+});
+
+// ─── 19. Relational queries: list contacts with include deals ───────────────
+
+describe('zero_list_contacts — include deals', () => {
+  it('includes deals in contact listing', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com',
+            createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+            deals: [
+              { id: 'd-1', name: 'Acme Deal', value: 25000 },
+            ],
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await contactTools.zero_list_contacts.handler({ include: ['deals'] });
+    const text = result.content[0].text;
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.fields).toContain('deals.id');
+    expect(callParams.fields).toContain('deals.name');
+
+    expect(text).toContain('Deals (1)');
+    expect(text).toContain('Acme Deal');
+  });
+});
+
+// ─── 20. Relational queries: list deals with include ────────────────────────
+
+describe('zero_list_deals — include tasks and contacts', () => {
+  it('includes tasks and contacts in deal listing', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'd-1', name: 'Big Deal', value: 50000, stage: 'stage-id-1',
+            createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+            tasks: [
+              { id: 't-1', name: 'Negotiate terms', done: false },
+            ],
+            contacts: [
+              { id: 'ct-1', firstName: 'John', lastName: 'Smith', email: 'john@corp.com' },
+            ],
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await dealTools.zero_list_deals.handler({ include: ['tasks', 'contacts'] });
+    const text = result.content[0].text;
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.fields).toContain('tasks.id');
+    expect(callParams.fields).toContain('contacts.id');
+
+    expect(text).toContain('Tasks (1)');
+    expect(text).toContain('Negotiate terms');
+    expect(text).toContain('Contacts (1)');
+    expect(text).toContain('John Smith');
+  });
+});
+
+// ─── 21. Include with empty related data ────────────────────────────────────
+
+describe('zero_list_companies — include with empty relations', () => {
+  it('gracefully handles empty related data', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'co-1', name: 'Empty Corp', domain: 'empty.com',
+            createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+            tasks: [],
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await companyTools.zero_list_companies.handler({ include: ['tasks'] });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Empty Corp');
+    // Empty arrays should not render a section
+    expect(text).not.toContain('Tasks (0)');
+  });
+});
+
+// ─── 22. Invalid include name is silently ignored ───────────────────────────
+
+describe('zero_list_companies — invalid include name', () => {
+  it('silently ignores invalid include names', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'co-1', name: 'Test Corp', domain: 'test.com',
+            createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await companyTools.zero_list_companies.handler({ include: ['nonexistent'] });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Test Corp');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 23. New entity: List tasks ─────────────────────────────────────────────
+
+describe('zero_list_tasks', () => {
+  it('lists tasks with checkbox formatting', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 't-1', name: 'Call client', done: false, deadline: '2026-03-01T00:00:00Z', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 't-2', name: 'Send report', done: true, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await taskTools.zero_list_tasks.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Tasks (2 of 2)');
+    expect(text).toContain('[ ] Call client');
+    expect(text).toContain('[x] Send report');
+    expect(text).toContain('t-1');
+    expect(result).not.toHaveProperty('isError');
+
+    expect(mockGet).toHaveBeenCalledWith('/api/tasks', expect.objectContaining({
+      params: expect.objectContaining({ workspaceId: WORKSPACE_ID }),
+    }));
+  });
+
+  it('applies where filter', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 't-3', name: 'Pending task', done: false, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const where = { done: false };
+    await taskTools.zero_list_tasks.handler({ where });
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBe(JSON.stringify(where));
+  });
+});
+
+// ─── 24. New entity: List notes ─────────────────────────────────────────────
+
+describe('zero_list_notes', () => {
+  it('lists notes', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'n-1', content: 'Meeting went well', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'n-2', content: { type: 'doc', text: 'Structured note' }, createdAt: '2024-06-16T00:00:00Z', updatedAt: '2024-06-16T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await noteTools.zero_list_notes.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Notes (2 of 2)');
+    expect(text).toContain('Meeting went well');
+    expect(text).toContain('Structured note');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 25. New entity: List activities ────────────────────────────────────────
+
+describe('zero_list_activities', () => {
+  it('lists activities with type and time', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'a-1', type: 'call', description: 'Sales call', occurredAt: '2024-06-15T10:00:00Z', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'a-2', type: 'meeting', description: 'Demo presentation', occurredAt: '2024-06-16T14:00:00Z', createdAt: '2024-06-16T00:00:00Z', updatedAt: '2024-06-16T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await activityTools.zero_list_activities.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Activities (2 of 2)');
+    expect(text).toContain('[call]');
+    expect(text).toContain('Sales call');
+    expect(text).toContain('[meeting]');
+    expect(text).toContain('Demo presentation');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 26. New entity: List email threads ─────────────────────────────────────
+
+describe('zero_list_email_threads', () => {
+  it('lists email threads with subject and snippet', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'e-1', subject: 'Partnership proposal', snippet: 'Hi, I wanted to discuss...', from: 'alice@corp.com', lastMessageAt: '2024-06-15T10:00:00Z', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await emailThreadTools.zero_list_email_threads.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Email Threads (1 of 1)');
+    expect(text).toContain('Partnership proposal');
+    expect(text).toContain('Hi, I wanted to discuss...');
+    expect(text).toContain('alice@corp.com');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 27. New entity: List calendar events ───────────────────────────────────
+
+describe('zero_list_calendar_events', () => {
+  it('lists calendar events with date/time', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ev-1', title: 'Team standup', startTime: '2024-06-15T09:00:00Z', endTime: '2024-06-15T09:30:00Z', location: 'Zoom', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Calendar Events (1 of 1)');
+    expect(text).toContain('Team standup');
+    expect(text).toContain('Zoom');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 28. New entity: List comments ──────────────────────────────────────────
+
+describe('zero_list_comments', () => {
+  it('lists comments with content', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'cm-1', content: 'Looks good!', authorId: 'user-1', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'cm-2', content: { type: 'rich', text: 'Nice work' }, authorId: 'user-2', createdAt: '2024-06-16T00:00:00Z', updatedAt: '2024-06-16T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await commentTools.zero_list_comments.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Comments (2 of 2)');
+    expect(text).toContain('Looks good!');
+    expect(text).toContain('Nice work');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 29. New entity: List lists ─────────────────────────────────────────────
+
+describe('zero_list_lists', () => {
+  it('lists with entity and color', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'l-1', name: 'Hot Leads', entity: 'company', color: 'red', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'l-2', name: 'Q1 Deals', entity: 'deal', color: 'blue', createdAt: '2024-06-16T00:00:00Z', updatedAt: '2024-06-16T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await listTools.zero_list_lists.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Lists (2 of 2)');
+    expect(text).toContain('Hot Leads');
+    expect(text).toContain('company');
+    expect(text).toContain('red');
+    expect(text).toContain('Q1 Deals');
+    expect(text).toContain('deal');
+    expect(text).toContain('blue');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 30. Create task ────────────────────────────────────────────────────────
+
+describe('zero_create_task', () => {
+  it('creates a task and returns success', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        id: 't-new',
+        name: 'Review contract',
+        done: false,
+        deadline: '2026-04-01T00:00:00Z',
+        createdAt: '2024-06-15T00:00:00Z',
+        updatedAt: '2024-06-15T00:00:00Z',
+      },
+    });
+
+    const result = await taskTools.zero_create_task.handler({
+      name: 'Review contract',
+      deadline: '2026-04-01T00:00:00Z',
+      companyId: 'co-1',
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Task Created Successfully');
+    expect(text).toContain('Review contract');
+    expect(text).toContain('t-new');
+    expect(result).not.toHaveProperty('isError');
+
+    expect(mockPost).toHaveBeenCalledWith('/api/tasks', expect.objectContaining({
+      name: 'Review contract',
+      deadline: '2026-04-01T00:00:00Z',
+      companyId: 'co-1',
+      workspaceId: WORKSPACE_ID,
+    }));
+  });
+});
+
+// ─── 31. Create note ────────────────────────────────────────────────────────
+
+describe('zero_create_note', () => {
+  it('creates a note and returns success', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        id: 'n-new',
+        content: 'Important findings from the call',
+        createdAt: '2024-06-15T00:00:00Z',
+        updatedAt: '2024-06-15T00:00:00Z',
+      },
+    });
+
+    const result = await noteTools.zero_create_note.handler({
+      content: 'Important findings from the call',
+      dealId: 'd-1',
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Note Created Successfully');
+    expect(text).toContain('n-new');
+    expect(result).not.toHaveProperty('isError');
+
+    expect(mockPost).toHaveBeenCalledWith('/api/notes', expect.objectContaining({
+      content: 'Important findings from the call',
+      dealId: 'd-1',
+      workspaceId: WORKSPACE_ID,
+    }));
   });
 });

@@ -7,6 +7,13 @@ import { companyTools } from './tools/companies.js';
 import { contactTools } from './tools/contacts.js';
 import { dealTools } from './tools/deals.js';
 import { pipelineStageTools } from './tools/pipeline-stages.js';
+import { taskTools } from './tools/tasks.js';
+import { noteTools } from './tools/notes.js';
+import { activityTools } from './tools/activities.js';
+import { emailThreadTools } from './tools/email-threads.js';
+import { calendarEventTools } from './tools/calendar-events.js';
+import { commentTools } from './tools/comments.js';
+import { listTools } from './tools/lists.js';
 
 const server = new McpServer({
   name: 'zero-crm',
@@ -149,6 +156,174 @@ server.tool(
   dealTools.zero_delete_deal.description,
   dealTools.zero_delete_deal.inputSchema.shape,
   dealTools.zero_delete_deal.handler
+);
+
+// Register task tools
+server.tool(
+  'zero_list_tasks',
+  taskTools.zero_list_tasks.description,
+  taskTools.zero_list_tasks.inputSchema.shape,
+  taskTools.zero_list_tasks.handler
+);
+
+server.tool(
+  'zero_get_task',
+  taskTools.zero_get_task.description,
+  taskTools.zero_get_task.inputSchema.shape,
+  taskTools.zero_get_task.handler
+);
+
+server.tool(
+  'zero_create_task',
+  taskTools.zero_create_task.description,
+  taskTools.zero_create_task.inputSchema.shape,
+  taskTools.zero_create_task.handler
+);
+
+server.tool(
+  'zero_update_task',
+  taskTools.zero_update_task.description,
+  taskTools.zero_update_task.inputSchema.shape,
+  taskTools.zero_update_task.handler
+);
+
+server.tool(
+  'zero_delete_task',
+  taskTools.zero_delete_task.description,
+  taskTools.zero_delete_task.inputSchema.shape,
+  taskTools.zero_delete_task.handler
+);
+
+// Register note tools
+server.tool(
+  'zero_list_notes',
+  noteTools.zero_list_notes.description,
+  noteTools.zero_list_notes.inputSchema.shape,
+  noteTools.zero_list_notes.handler
+);
+
+server.tool(
+  'zero_get_note',
+  noteTools.zero_get_note.description,
+  noteTools.zero_get_note.inputSchema.shape,
+  noteTools.zero_get_note.handler
+);
+
+server.tool(
+  'zero_create_note',
+  noteTools.zero_create_note.description,
+  noteTools.zero_create_note.inputSchema.shape,
+  noteTools.zero_create_note.handler
+);
+
+server.tool(
+  'zero_update_note',
+  noteTools.zero_update_note.description,
+  noteTools.zero_update_note.inputSchema.shape,
+  noteTools.zero_update_note.handler
+);
+
+server.tool(
+  'zero_delete_note',
+  noteTools.zero_delete_note.description,
+  noteTools.zero_delete_note.inputSchema.shape,
+  noteTools.zero_delete_note.handler
+);
+
+// Register activity tools
+server.tool(
+  'zero_list_activities',
+  activityTools.zero_list_activities.description,
+  activityTools.zero_list_activities.inputSchema.shape,
+  activityTools.zero_list_activities.handler
+);
+
+server.tool(
+  'zero_get_activity',
+  activityTools.zero_get_activity.description,
+  activityTools.zero_get_activity.inputSchema.shape,
+  activityTools.zero_get_activity.handler
+);
+
+// Register email thread tools
+server.tool(
+  'zero_list_email_threads',
+  emailThreadTools.zero_list_email_threads.description,
+  emailThreadTools.zero_list_email_threads.inputSchema.shape,
+  emailThreadTools.zero_list_email_threads.handler
+);
+
+server.tool(
+  'zero_get_email_thread',
+  emailThreadTools.zero_get_email_thread.description,
+  emailThreadTools.zero_get_email_thread.inputSchema.shape,
+  emailThreadTools.zero_get_email_thread.handler
+);
+
+// Register calendar event tools
+server.tool(
+  'zero_list_calendar_events',
+  calendarEventTools.zero_list_calendar_events.description,
+  calendarEventTools.zero_list_calendar_events.inputSchema.shape,
+  calendarEventTools.zero_list_calendar_events.handler
+);
+
+server.tool(
+  'zero_get_calendar_event',
+  calendarEventTools.zero_get_calendar_event.description,
+  calendarEventTools.zero_get_calendar_event.inputSchema.shape,
+  calendarEventTools.zero_get_calendar_event.handler
+);
+
+// Register comment tools
+server.tool(
+  'zero_list_comments',
+  commentTools.zero_list_comments.description,
+  commentTools.zero_list_comments.inputSchema.shape,
+  commentTools.zero_list_comments.handler
+);
+
+server.tool(
+  'zero_get_comment',
+  commentTools.zero_get_comment.description,
+  commentTools.zero_get_comment.inputSchema.shape,
+  commentTools.zero_get_comment.handler
+);
+
+server.tool(
+  'zero_create_comment',
+  commentTools.zero_create_comment.description,
+  commentTools.zero_create_comment.inputSchema.shape,
+  commentTools.zero_create_comment.handler
+);
+
+server.tool(
+  'zero_update_comment',
+  commentTools.zero_update_comment.description,
+  commentTools.zero_update_comment.inputSchema.shape,
+  commentTools.zero_update_comment.handler
+);
+
+server.tool(
+  'zero_delete_comment',
+  commentTools.zero_delete_comment.description,
+  commentTools.zero_delete_comment.inputSchema.shape,
+  commentTools.zero_delete_comment.handler
+);
+
+// Register list tools
+server.tool(
+  'zero_list_lists',
+  listTools.zero_list_lists.description,
+  listTools.zero_list_lists.inputSchema.shape,
+  listTools.zero_list_lists.handler
+);
+
+server.tool(
+  'zero_get_list',
+  listTools.zero_get_list.description,
+  listTools.zero_get_list.inputSchema.shape,
+  listTools.zero_get_list.handler
 );
 
 async function main() {

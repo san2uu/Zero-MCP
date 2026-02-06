@@ -1,25 +1,33 @@
 import { z } from 'zod';
 import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
 import { Contact, ApiListResponse } from '../types.js';
+import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
 
 export const contactTools = {
   zero_list_contacts: {
-    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}).',
+    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}). Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]).',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"lastName": "asc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include (use company.name for related data)'),
-      includeCompany: z.boolean().optional().default(true).describe('Include company details'),
+      includeCompany: z.boolean().optional().default(true).describe('Include company details (legacy, prefer "include" param)'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: company, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
-    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; includeCompany?: boolean }) => {
+    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; includeCompany?: boolean; include?: string[] }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
         let fields = args.fields;
-        if (args.includeCompany !== false && !fields) {
+        if (args.include && args.include.length > 0) {
+          // When using include, build fields from the include list
+          if (!fields) {
+            fields = 'id,firstName,lastName,email,phone,title,companyId,createdAt,updatedAt';
+          }
+          fields = buildIncludeFields('contact', args.include, fields);
+        } else if (args.includeCompany !== false && !fields) {
           fields = 'id,firstName,lastName,email,phone,title,companyId,company.id,company.name,createdAt,updatedAt';
         }
 
@@ -50,13 +58,19 @@ export const contactTools = {
 
         const markdown = `## Contacts (${contacts.length}${total ? ` of ${total}` : ''})
 
-${contacts.map((c, i) => `### ${i + 1}. ${c.firstName} ${c.lastName}
+${contacts.map((c, i) => {
+  let entry = `### ${i + 1}. ${c.firstName} ${c.lastName}
 - **ID:** ${c.id}
 - **Email:** ${c.email || 'N/A'}
 - **Phone:** ${c.phone || 'N/A'}
 - **Title:** ${c.title || 'N/A'}
 - **Company:** ${c.company?.name || 'N/A'}
-`).join('\n')}
+`;
+  if (args.include && args.include.length > 0) {
+    entry += formatIncludedRelations('contact', c as unknown as Record<string, unknown>, args.include);
+  }
+  return entry;
+}).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
         return {
@@ -78,27 +92,34 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   },
 
   zero_get_contact: {
-    description: 'Get a single contact by ID with full details.',
+    description: 'Get a single contact by ID with full details. Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]).',
     inputSchema: z.object({
       id: z.string().describe('The contact ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: company, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
-    handler: async (args: { id: string; fields?: string }) => {
+    handler: async (args: { id: string; fields?: string; include?: string[] }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
-        const params: Record<string, string> = { workspaceId };
-        if (args.fields) {
-          params.fields = args.fields;
-        } else {
-          params.fields = 'id,firstName,lastName,email,phone,title,linkedinUrl,companyId,company.id,company.name,createdAt,updatedAt,archivedAt';
+        let fields = args.fields;
+        if (args.include && args.include.length > 0) {
+          if (!fields) {
+            fields = 'id,firstName,lastName,email,phone,title,linkedinUrl,companyId,createdAt,updatedAt,archivedAt';
+          }
+          fields = buildIncludeFields('contact', args.include, fields);
+        } else if (!fields) {
+          fields = 'id,firstName,lastName,email,phone,title,linkedinUrl,companyId,company.id,company.name,createdAt,updatedAt,archivedAt';
         }
+
+        const params: Record<string, string> = { workspaceId };
+        if (fields) params.fields = fields;
 
         const response = await client.get<Contact>(`/api/contacts/${args.id}`, { params });
         const contact = response.data;
 
-        const markdown = `## ${contact.firstName} ${contact.lastName}
+        let markdown = `## ${contact.firstName} ${contact.lastName}
 
 **ID:** ${contact.id}
 **Email:** ${contact.email || 'N/A'}
@@ -113,6 +134,10 @@ ${contact.company ? `**${contact.company.name}** (${contact.company.id})` : 'No 
 - **Created:** ${new Date(contact.createdAt).toLocaleString()}
 - **Updated:** ${new Date(contact.updatedAt).toLocaleString()}
 ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleString()}` : ''}`;
+
+        if (args.include && args.include.length > 0) {
+          markdown += formatIncludedRelations('contact', contact as unknown as Record<string, unknown>, args.include);
+        }
 
         return {
           content: [{

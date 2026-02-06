@@ -30,6 +30,34 @@ export const API_REFERENCE = {
       list: { path: '/api/deals', methods: ['GET', 'POST'] },
       single: { path: '/api/deals/{id}', methods: ['PATCH', 'DELETE'] },
     },
+    tasks: {
+      list: { path: '/api/tasks', methods: ['GET', 'POST'] },
+      single: { path: '/api/tasks/{id}', methods: ['PATCH', 'DELETE'] },
+    },
+    notes: {
+      list: { path: '/api/notes', methods: ['GET', 'POST'] },
+      single: { path: '/api/notes/{id}', methods: ['PATCH', 'DELETE'] },
+    },
+    activities: {
+      list: { path: '/api/activities', methods: ['GET'] },
+      single: { path: '/api/activities/{id}', methods: ['GET'] },
+    },
+    emailThreads: {
+      list: { path: '/api/emailThreads', methods: ['GET'] },
+      single: { path: '/api/emailThreads/{id}', methods: ['GET'] },
+    },
+    calendarEvents: {
+      list: { path: '/api/calendarEvents', methods: ['GET'] },
+      single: { path: '/api/calendarEvents/{id}', methods: ['GET'] },
+    },
+    comments: {
+      list: { path: '/api/comments', methods: ['GET', 'POST'] },
+      single: { path: '/api/comments/{id}', methods: ['PATCH', 'DELETE'] },
+    },
+    lists: {
+      list: { path: '/api/lists', methods: ['GET'] },
+      single: { path: '/api/lists/{id}', methods: ['GET'] },
+    },
   },
 
   commonQueryParams: {

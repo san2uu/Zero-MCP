@@ -1,25 +1,35 @@
 import { z } from 'zod';
 import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, resolveStageName, fetchCompaniesByIds } from '../services/api.js';
 import { Deal, ApiListResponse } from '../types.js';
+import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
 
 export const dealTools = {
   zero_list_deals: {
-    description: 'List deals in Zero CRM with optional filtering and pagination. Stages are IDs, not names — use zero_list_pipeline_stages to look up stage IDs first. Company location (city, country) is automatically included in the response. To filter deals by company attributes (e.g., location, industry, size), first use zero_list_companies with the appropriate filter to find matching company IDs, then filter deals with {"companyId": {"$in": [...]}}. Filter examples: {"stage": "<stage_id>"}, {"value": {"$gte": 50000}}, {"value": {"$between": [1000, 5000]}}, {"closeDate:month": "2026-01"}, {"stage": {"$in": ["id1", "id2"]}}, {"ownerIds": {"$includes": "userId"}}, {"companyId": {"$in": ["id1", "id2"]}}.',
+    description: 'List deals in Zero CRM with optional filtering and pagination. Stages are IDs, not names — use zero_list_pipeline_stages to look up stage IDs first. Company location (city, country) is automatically included in the response. Use "include" to fetch related data inline (e.g., ["tasks", "contacts", "notes"]). To filter deals by company attributes (e.g., location, industry, size), first use zero_list_companies with the appropriate filter to find matching company IDs, then filter deals with {"companyId": {"$in": [...]}}. Filter examples: {"stage": "<stage_id>"}, {"value": {"$gte": 50000}}, {"value": {"$between": [1000, 5000]}}, {"closeDate:month": "2026-01"}, {"stage": {"$in": ["id1", "id2"]}}, {"ownerIds": {"$includes": "userId"}}, {"companyId": {"$in": ["id1", "id2"]}}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"value": {"$gte": 50000}}, {"stage": {"$in": ["id1", "id2"]}}, {"closeDate:month": "2026-01"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"value": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
-      includeRelations: z.boolean().optional().default(true).describe('Include company details'),
+      includeRelations: z.boolean().optional().default(true).describe('Include company details (legacy, prefer "include" param)'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: company, contacts, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
-    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; includeRelations?: boolean }) => {
+    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; includeRelations?: boolean; include?: string[] }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
+        const hasInclude = args.include && args.include.length > 0;
+        const includeHasCompany = hasInclude && args.include!.includes('company');
+
         let fields = args.fields;
-        if (args.includeRelations !== false && !fields) {
+        if (hasInclude) {
+          if (!fields) {
+            fields = 'id,name,value,stage,confidence,closeDate,companyId,createdAt,updatedAt';
+          }
+          fields = buildIncludeFields('deal', args.include!, fields);
+        } else if (args.includeRelations !== false && !fields) {
           fields = 'id,name,value,stage,confidence,closeDate,companyId,company.id,company.name,createdAt,updatedAt';
         }
 
@@ -53,11 +63,13 @@ export const dealTools = {
           return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(deal.value);
         };
 
-        // Resolve stage names and enrich company details in parallel
+        // Resolve stage names and optionally enrich company details in parallel
+        // Skip fetchCompaniesByIds when include has "company" (already fetched via fields)
         const companyIds = deals.map((d) => d.companyId).filter(Boolean) as string[];
+        const shouldFetchCompanies = !includeHasCompany && args.includeRelations !== false;
         const [stageNames, companyMap] = await Promise.all([
           Promise.all(deals.map((d) => resolveStageName(d.stage))),
-          args.includeRelations !== false ? fetchCompaniesByIds(companyIds) : Promise.resolve(new Map()),
+          shouldFetchCompanies ? fetchCompaniesByIds(companyIds) : Promise.resolve(new Map()),
         ]);
 
         const formatCompany = (deal: Deal) => {
@@ -70,14 +82,20 @@ export const dealTools = {
 
         const markdown = `## Deals (${deals.length}${total ? ` of ${total}` : ''})
 
-${deals.map((d, i) => `### ${i + 1}. ${d.name}
+${deals.map((d, i) => {
+  let entry = `### ${i + 1}. ${d.name}
 - **ID:** ${d.id}
 - **Value:** ${formatValue(d)}
 - **Stage:** ${stageNames[i]}
 - **Confidence:** ${d.confidence ? `${Math.round(parseFloat(d.confidence) * 100)}%` : 'N/A'}
 - **Close Date:** ${d.closeDate ? new Date(d.closeDate).toLocaleDateString() : 'N/A'}
-- **Company:** ${formatCompany(d)}
-`).join('\n')}
+- **Company:** ${includeHasCompany ? (d.company?.name || 'N/A') : formatCompany(d)}
+`;
+  if (hasInclude) {
+    entry += formatIncludedRelations('deal', d as unknown as Record<string, unknown>, args.include!);
+  }
+  return entry;
+}).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
         return {
@@ -99,22 +117,32 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   },
 
   zero_get_deal: {
-    description: 'Get a single deal by ID with full details.',
+    description: 'Get a single deal by ID with full details. Use "include" to fetch related data inline (e.g., ["tasks", "contacts", "notes"]).',
     inputSchema: z.object({
       id: z.string().describe('The deal ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: company, contacts, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
-    handler: async (args: { id: string; fields?: string }) => {
+    handler: async (args: { id: string; fields?: string; include?: string[] }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
-        const params: Record<string, string> = { workspaceId };
-        if (args.fields) {
-          params.fields = args.fields;
-        } else {
-          params.fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,company.id,company.name,contactIds,ownerIds,archived,createdAt,updatedAt,archivedAt';
+        const hasInclude = args.include && args.include.length > 0;
+        const includeHasCompany = hasInclude && args.include!.includes('company');
+
+        let fields = args.fields;
+        if (hasInclude) {
+          if (!fields) {
+            fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,contactIds,ownerIds,archived,createdAt,updatedAt,archivedAt';
+          }
+          fields = buildIncludeFields('deal', args.include!, fields);
+        } else if (!fields) {
+          fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,company.id,company.name,contactIds,ownerIds,archived,createdAt,updatedAt,archivedAt';
         }
+
+        const params: Record<string, string> = { workspaceId };
+        if (fields) params.fields = fields;
 
         const response = await client.get<{ data: Deal }>(`/api/deals/${args.id}`, { params });
         const deal = response.data.data;
@@ -124,17 +152,18 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
           return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(d.value);
         };
 
-        // Resolve stage name and enrich company details in parallel
+        // Skip fetchCompaniesByIds when include has "company"
+        const shouldFetchCompany = !includeHasCompany && deal.companyId;
         const [stageName, companyMap] = await Promise.all([
           resolveStageName(deal.stage),
-          deal.companyId ? fetchCompaniesByIds([deal.companyId]) : Promise.resolve(new Map()),
+          shouldFetchCompany ? fetchCompaniesByIds([deal.companyId!]) : Promise.resolve(new Map()),
         ]);
 
         const enrichedCompany = deal.companyId ? companyMap.get(deal.companyId) : undefined;
         const companyName = enrichedCompany?.name || deal.company?.name;
         const companyLocation = [enrichedCompany?.city, enrichedCompany?.country].filter(Boolean).join(', ');
 
-        const markdown = `## ${deal.name}
+        let markdown = `## ${deal.name}
 
 **ID:** ${deal.id}
 **Value:** ${formatValue(deal)}
@@ -149,6 +178,10 @@ ${companyName ? `**${companyName}** (${deal.company?.id || deal.companyId})${com
 - **Created:** ${new Date(deal.createdAt).toLocaleString()}
 - **Updated:** ${new Date(deal.updatedAt).toLocaleString()}
 ${deal.archivedAt ? `- **Archived:** ${new Date(deal.archivedAt).toLocaleString()}` : ''}`;
+
+        if (hasInclude) {
+          markdown += formatIncludedRelations('deal', deal as unknown as Record<string, unknown>, args.include!);
+        }
 
         return {
           content: [{

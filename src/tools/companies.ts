@@ -1,21 +1,28 @@
 import { z } from 'zod';
 import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
 import { Company, ApiListResponse } from '../types.js';
+import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
 
 export const companyTools = {
   zero_list_companies: {
-    description: 'List companies in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"name": {"$contains": "Acme"}}, {"location.city": "San Francisco"}, {"location.country": "United States"}).',
+    description: 'List companies in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"name": {"$contains": "Acme"}}, {"location.city": "San Francisco"}, {"location.country": "United States"}). Use "include" to fetch related data inline (e.g., ["tasks", "contacts", "deals"]).',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"name": {"$contains": "Acme"}}, {"location.city": "San Francisco"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"createdAt": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
-    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string }) => {
+    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; include?: string[] }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
+
+        let fields = args.fields;
+        if (args.include && args.include.length > 0) {
+          fields = buildIncludeFields('company', args.include, fields);
+        }
 
         const params = buildQueryParams({
           workspaceId,
@@ -23,7 +30,7 @@ export const companyTools = {
           limit: args.limit || 20,
           offset: args.offset || 0,
           orderBy: args.orderBy,
-          fields: args.fields,
+          fields,
         });
 
         const response = await client.get<ApiListResponse<Company>>('/api/companies', { params });
@@ -44,13 +51,19 @@ export const companyTools = {
 
         const markdown = `## Companies (${companies.length}${total ? ` of ${total}` : ''})
 
-${companies.map((c, i) => `### ${i + 1}. ${c.name}
+${companies.map((c, i) => {
+  let entry = `### ${i + 1}. ${c.name}
 - **ID:** ${c.id}
 - **Domain:** ${c.domain || 'N/A'}
 - **Industry:** ${c.industry || 'N/A'}
 - **Size:** ${c.size || 'N/A'}
 - **Location:** ${[c.city || c.location?.city, c.state || c.location?.state, c.country || c.location?.country].filter(Boolean).join(', ') || 'N/A'}
-`).join('\n')}
+`;
+  if (args.include && args.include.length > 0) {
+    entry += formatIncludedRelations('company', c as unknown as Record<string, unknown>, args.include);
+  }
+  return entry;
+}).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
         return {
@@ -72,23 +85,29 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   },
 
   zero_get_company: {
-    description: 'Get a single company by ID with full details.',
+    description: 'Get a single company by ID with full details. Use "include" to fetch related data inline (e.g., ["tasks", "contacts", "deals"]).',
     inputSchema: z.object({
       id: z.string().describe('The company ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
-    handler: async (args: { id: string; fields?: string }) => {
+    handler: async (args: { id: string; fields?: string; include?: string[] }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
+        let fields = args.fields;
+        if (args.include && args.include.length > 0) {
+          fields = buildIncludeFields('company', args.include, fields);
+        }
+
         const params: Record<string, string> = { workspaceId };
-        if (args.fields) params.fields = args.fields;
+        if (fields) params.fields = fields;
 
         const response = await client.get<Company>(`/api/companies/${args.id}`, { params });
         const company = response.data;
 
-        const markdown = `## ${company.name}
+        let markdown = `## ${company.name}
 
 **ID:** ${company.id}
 **Domain:** ${company.domain || 'N/A'}
@@ -110,6 +129,10 @@ ${company.description || 'No description'}
 - **Created:** ${new Date(company.createdAt).toLocaleString()}
 - **Updated:** ${new Date(company.updatedAt).toLocaleString()}
 ${company.archivedAt ? `- **Archived:** ${new Date(company.archivedAt).toLocaleString()}` : ''}`;
+
+        if (args.include && args.include.length > 0) {
+          markdown += formatIncludedRelations('company', company as unknown as Record<string, unknown>, args.include);
+        }
 
         return {
           content: [{

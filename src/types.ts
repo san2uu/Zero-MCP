@@ -101,6 +101,100 @@ export interface OrderByClause {
   [field: string]: 'asc' | 'desc';
 }
 
+export interface Task {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string | Record<string, unknown>;
+  done?: boolean;
+  deadline?: string;
+  companyId?: string;
+  contactId?: string;
+  dealId?: string;
+  assigneeIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+export interface Note {
+  id: string;
+  workspaceId: string;
+  content?: string | Record<string, unknown>;
+  companyId?: string;
+  contactId?: string;
+  dealId?: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+export interface Activity {
+  id: string;
+  workspaceId: string;
+  type?: string;
+  description?: string;
+  companyId?: string;
+  contactId?: string;
+  dealId?: string;
+  occurredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailThread {
+  id: string;
+  workspaceId: string;
+  subject?: string;
+  snippet?: string;
+  from?: string;
+  to?: string[];
+  companyId?: string;
+  contactId?: string;
+  dealId?: string;
+  lastMessageAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  workspaceId: string;
+  title?: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  companyId?: string;
+  contactId?: string;
+  dealId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Comment {
+  id: string;
+  workspaceId: string;
+  content?: string | Record<string, unknown>;
+  authorId?: string;
+  companyId?: string;
+  contactId?: string;
+  dealId?: string;
+  taskId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface List {
+  id: string;
+  workspaceId: string;
+  name: string;
+  entity?: string;
+  color?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ListParams {
   workspaceId?: string;
   fields?: string;
