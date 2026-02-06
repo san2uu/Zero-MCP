@@ -1,34 +1,134 @@
 import { z } from 'zod';
+import { AxiosInstance } from 'axios';
 import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
 import { CalendarEvent, ApiListResponse } from '../types.js';
+import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
+
+/**
+ * Manually resolves included relations on calendar events.
+ * Used as a workaround when the API's JOIN-based include fails with 500
+ * when combined with where/orderBy filters.
+ */
+async function resolveCalendarEventIncludes(
+  client: AxiosInstance,
+  workspaceId: string,
+  events: CalendarEvent[],
+  include: string[],
+): Promise<void> {
+  const resolvePromises: Promise<void>[] = [];
+
+  if (include.includes('contacts')) {
+    const allContactIds = [...new Set(events.flatMap(e => e.contactIds || []))];
+    if (allContactIds.length > 0) {
+      resolvePromises.push(
+        (async () => {
+          try {
+            const params = buildQueryParams({
+              workspaceId,
+              where: { id: { $in: allContactIds } },
+              limit: allContactIds.length,
+              fields: 'id,firstName,lastName,email,title',
+            });
+            const response = await client.get('/api/contacts', { params });
+            const contacts = response.data.data || [];
+            const contactMap = new Map(contacts.map((c: Record<string, string>) => [c.id, c]));
+            for (const event of events) {
+              (event as unknown as Record<string, unknown>).contacts = (event.contactIds || [])
+                .map((id: string) => contactMap.get(id))
+                .filter(Boolean);
+            }
+          } catch {
+            // If contact resolution fails, events still display with contactIds
+          }
+        })(),
+      );
+    }
+  }
+
+  if (include.includes('companies')) {
+    const allCompanyIds = [...new Set(events.flatMap(e => e.companyIds || []))];
+    if (allCompanyIds.length > 0) {
+      resolvePromises.push(
+        (async () => {
+          try {
+            const params = buildQueryParams({
+              workspaceId,
+              where: { id: { $in: allCompanyIds } },
+              limit: allCompanyIds.length,
+              fields: 'id,name,domain',
+            });
+            const response = await client.get('/api/companies', { params });
+            const companies = response.data.data || [];
+            const companyMap = new Map(companies.map((c: Record<string, string>) => [c.id, c]));
+            for (const event of events) {
+              (event as unknown as Record<string, unknown>).companies = (event.companyIds || [])
+                .map((id: string) => companyMap.get(id))
+                .filter(Boolean);
+            }
+          } catch {
+            // If company resolution fails, events still display with companyIds
+          }
+        })(),
+      );
+    }
+  }
+
+  // 'tasks' cannot be resolved via fallback — no way to query tasks by calendar event ID
+  await Promise.all(resolvePromises);
+}
 
 export const calendarEventTools = {
   zero_list_calendar_events: {
-    description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Other filter examples: {"startTime": {"$gte": "2026-02-03"}}.',
+    description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Date range filter: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}. Single-bound filter: {"startTime": {"$gte": "2026-02-03"}}. By default, events with no start time are excluded (set excludeNullDates: false to include them).',
     inputSchema: z.object({
-      where: z.record(z.unknown()).optional().describe('Filter conditions. Array fields use $contains: {"contactIds": {"$contains": "uuid"}}, {"companyIds": {"$contains": "uuid"}}'),
+      where: z.record(z.unknown()).optional().describe('Filter conditions. Array fields use $contains: {"contactIds": {"$contains": "uuid"}}. Date ranges use $between: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
       offset: z.number().optional().default(0).describe('Pagination offset'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"startTime": "asc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, companies, tasks. Use include: ["contacts"] to get full contact details instead of just IDs.'),
+      excludeNullDates: z.boolean().optional().default(true).describe('Exclude events with no start time (default: true). Set false to include all.'),
     }),
-    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string }) => {
+    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; include?: string[]; excludeNullDates?: boolean }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
+        // Exclude events with null startTime by default
+        let where = args.where;
+        if (args.excludeNullDates !== false && (!where || !where.startTime)) {
+          where = { ...where, startTime: { $gte: '2000-01-01' } };
+        }
+
+        // API bug: relation JOINs (include) combined with where/orderBy cause 500.
+        // Fall back to manual resolution when both are present.
+        const useIncludeFallback = args.include && args.include.length > 0 && (where || args.orderBy);
+
+        let fields = args.fields;
+        if (args.include && args.include.length > 0 && !useIncludeFallback) {
+          if (!fields) {
+            fields = 'id,name,startTime,endTime,location,userIds,dealIds,companyIds,contactIds,createdAt,updatedAt';
+          }
+          fields = buildIncludeFields('calendarEvent', args.include, fields);
+        }
+
         const params = buildQueryParams({
           workspaceId,
-          where: args.where,
+          where,
           limit: args.limit || 20,
           offset: args.offset || 0,
           orderBy: args.orderBy,
-          fields: args.fields,
+          fields,
         });
 
         const response = await client.get<ApiListResponse<CalendarEvent>>('/api/calendarEvents', { params });
         const events = response.data.data || [];
         const total = response.data.total;
+
+        // Manually resolve included relations in fallback mode
+        if (useIncludeFallback && events.length > 0) {
+          await resolveCalendarEventIncludes(client, workspaceId, events, args.include!);
+        }
         const limit = args.limit || 20;
         const offset = args.offset || 0;
         const hasMore = total ? offset + events.length < total : events.length === limit;
@@ -55,7 +155,7 @@ ${ev.userIds?.length ? `- **User IDs:** ${ev.userIds.join(', ')}` : ''}
 ${ev.dealIds?.length ? `- **Deal IDs:** ${ev.dealIds.join(', ')}` : ''}
 ${ev.companyIds?.length ? `- **Company IDs:** ${ev.companyIds.join(', ')}` : ''}
 ${ev.contactIds?.length ? `- **Contact IDs:** ${ev.contactIds.join(', ')}` : ''}
-`;
+${args.include && args.include.length > 0 ? formatIncludedRelations('calendarEvent', ev as unknown as Record<string, unknown>, args.include) : ''}`;
 }).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -82,14 +182,23 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
     inputSchema: z.object({
       id: z.string().describe('The calendar event ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, companies, tasks'),
     }),
-    handler: async (args: { id: string; fields?: string }) => {
+    handler: async (args: { id: string; fields?: string; include?: string[] }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
+        let fields = args.fields;
+        if (args.include && args.include.length > 0) {
+          if (!fields) {
+            fields = 'id,name,description,startTime,endTime,location,userIds,attendeeEmails,dealIds,companyIds,contactIds,createdAt,updatedAt';
+          }
+          fields = buildIncludeFields('calendarEvent', args.include, fields);
+        }
+
         const params: Record<string, string> = { workspaceId };
-        if (args.fields) params.fields = args.fields;
+        if (fields) params.fields = fields;
 
         const response = await client.get(`/api/calendarEvents/${args.id}`, { params });
         const event: CalendarEvent = response.data.data || response.data;
@@ -97,7 +206,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         const start = event.startTime ? new Date(event.startTime).toLocaleString() : 'N/A';
         const end = event.endTime ? new Date(event.endTime).toLocaleString() : 'N/A';
 
-        const markdown = `## ${event.name || 'Untitled'}
+        let markdown = `## ${event.name || 'Untitled'}
 
 **ID:** ${event.id}
 **Start:** ${start}
@@ -117,6 +226,10 @@ ${event.contactIds?.length ? `- **Contact IDs:** ${event.contactIds.join(', ')}`
 ### Timestamps
 - **Created:** ${new Date(event.createdAt).toLocaleString()}
 - **Updated:** ${new Date(event.updatedAt).toLocaleString()}`;
+
+        if (args.include && args.include.length > 0) {
+          markdown += formatIncludedRelations('calendarEvent', event as unknown as Record<string, unknown>, args.include);
+        }
 
         return {
           content: [{

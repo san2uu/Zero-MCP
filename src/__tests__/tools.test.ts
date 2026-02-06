@@ -42,7 +42,7 @@ import { commentTools } from '../tools/comments.js';
 import { issueTools } from '../tools/issues.js';
 import { listTools } from '../tools/lists.js';
 import { activeDealTools } from '../tools/active-deals.js';
-import { setCachedWorkspaceId, setCachedPipelineStages } from '../services/api.js';
+import { setCachedWorkspaceId, setCachedPipelineStages, buildQueryParams } from '../services/api.js';
 import { AxiosError } from 'axios';
 
 const WORKSPACE_ID = 'ws-001';
@@ -944,6 +944,45 @@ describe('zero_list_calendar_events', () => {
     expect(text).toContain('Team standup');
     expect(text).toContain('Zoom');
     expect(result).not.toHaveProperty('isError');
+
+    // Default excludeNullDates injects startTime filter
+    const callParams = mockGet.mock.calls[0][1].params;
+    const where = JSON.parse(callParams.where);
+    expect(where.startTime).toEqual({ $gte: '2000-01-01' });
+  });
+
+  it('does not inject startTime filter when excludeNullDates is false', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [],
+        total: 0,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    await calendarEventTools.zero_list_calendar_events.handler({ excludeNullDates: false });
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBeUndefined();
+  });
+
+  it('does not override explicit startTime filter', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [],
+        total: 0,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const where = { startTime: { $gte: '2026-01-01' } };
+    await calendarEventTools.zero_list_calendar_events.handler({ where });
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    const parsedWhere = JSON.parse(callParams.where);
+    expect(parsedWhere.startTime).toEqual({ $gte: '2026-01-01' });
   });
 });
 
@@ -1077,8 +1116,8 @@ describe('zero_list_issues', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'iss-1', title: 'Customer request', status: 'open', source: 'slack', description: 'Need pricing info', dealId: 'd-1', companyId: 'co-1', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
-          { id: 'iss-2', title: 'Bug report', status: 'closed', source: 'slack', description: 'Login issue', contactId: 'ct-1', createdAt: '2024-06-16T00:00:00Z', updatedAt: '2024-06-16T00:00:00Z' },
+          { id: 'iss-1', name: 'Customer request', status: 'open', source: 'slack', description: 'Need pricing info', companyIds: ['co-1'], channel: '#support', createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z' },
+          { id: 'iss-2', name: 'Bug report', status: 'closed', source: 'slack', description: 'Login issue', contactIds: ['ct-1'], createdAt: '2024-06-16T00:00:00Z', updatedAt: '2024-06-16T00:00:00Z' },
         ],
         total: 2,
         limit: 20,
@@ -1094,10 +1133,11 @@ describe('zero_list_issues', () => {
     expect(text).toContain('Bug report');
     expect(text).toContain('open');
     expect(text).toContain('slack');
-    expect(text).toContain('Deal ID:');
-    expect(text).toContain('d-1');
-    expect(text).toContain('Company ID:');
+    expect(text).toContain('Company IDs:');
     expect(text).toContain('co-1');
+    expect(text).toContain('Contact IDs:');
+    expect(text).toContain('ct-1');
+    expect(text).toContain('#support');
     expect(result).not.toHaveProperty('isError');
   });
 
@@ -1105,7 +1145,7 @@ describe('zero_list_issues', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'iss-3', title: 'Recent message', status: 'open', createdAt: '2026-02-04T00:00:00Z', updatedAt: '2026-02-04T00:00:00Z' },
+          { id: 'iss-3', name: 'Recent message', status: 'open', createdAt: '2026-02-04T00:00:00Z', updatedAt: '2026-02-04T00:00:00Z' },
         ],
         total: 1,
         limit: 20,
@@ -1129,14 +1169,15 @@ describe('zero_get_issue', () => {
       data: {
         data: {
           id: 'iss-1',
-          title: 'Customer request',
+          name: 'Customer request',
           status: 'open',
-          priority: 'high',
+          priority: 2,
           source: 'slack',
           description: 'Need pricing info',
-          dealId: 'd-1',
-          companyId: 'co-1',
-          contactId: 'ct-1',
+          companyIds: ['co-1'],
+          contactIds: ['ct-1'],
+          channel: '#support',
+          link: 'https://slack.com/msg/123',
           createdAt: '2024-06-15T00:00:00Z',
           updatedAt: '2024-06-15T00:00:00Z',
         },
@@ -1148,11 +1189,12 @@ describe('zero_get_issue', () => {
 
     expect(text).toContain('Customer request');
     expect(text).toContain('open');
-    expect(text).toContain('high');
+    expect(text).toContain('2');
     expect(text).toContain('slack');
-    expect(text).toContain('Deal ID:');
-    expect(text).toContain('Company ID:');
-    expect(text).toContain('Contact ID:');
+    expect(text).toContain('Company IDs:');
+    expect(text).toContain('Contact IDs:');
+    expect(text).toContain('#support');
+    expect(text).toContain('https://slack.com/msg/123');
     expect(result).not.toHaveProperty('isError');
   });
 });
@@ -1222,7 +1264,7 @@ describe('zero_list_calendar_events — entity associations', () => {
       },
     });
 
-    const result = await calendarEventTools.zero_list_calendar_events.handler({});
+    const result = await calendarEventTools.zero_list_calendar_events.handler({ where: { startTime: { $gte: '2024-01-01' } } });
     const text = result.content[0].text;
 
     expect(text).toContain('Deal IDs:');
@@ -1381,6 +1423,324 @@ describe('zero_find_active_deals', () => {
     expect(text).toContain('Resilient Deal');
     expect(text).toContain('1 activity');
     expect(text).toContain('1 email');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 38. Resolve contacts by IDs ──────────────────────────────────────────────
+
+describe('zero_resolve_contacts', () => {
+  it('resolves multiple contacts by ID array', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO', company: { id: 'co-1', name: 'Acme Corp' }, createdAt: '2024-01-01T00:00:00Z' },
+          { id: 'ct-2', firstName: 'John', lastName: 'Smith', email: 'john@globex.com', title: 'VP', company: { id: 'co-2', name: 'Globex Inc' }, createdAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 2,
+      },
+    });
+
+    const result = await contactTools.zero_resolve_contacts.handler({
+      ids: ['ct-1', 'ct-2', 'ct-unknown'],
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Resolved Contacts (2 of 3 IDs)');
+    expect(text).toContain('Jane Doe');
+    expect(text).toContain('John Smith');
+    expect(text).toContain('Acme Corp');
+    expect(text).toContain('Unresolved IDs (1)');
+    expect(text).toContain('ct-unknown');
+    expect(result).not.toHaveProperty('isError');
+
+    // Verify $in filter was sent
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBe(JSON.stringify({ id: { $in: ['ct-1', 'ct-2', 'ct-unknown'] } }));
+  });
+
+  it('handles all IDs resolved', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', createdAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+
+    const result = await contactTools.zero_resolve_contacts.handler({ ids: ['ct-1'] });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Resolved Contacts (1 of 1 IDs)');
+    expect(text).not.toContain('Unresolved');
+  });
+
+  it('handles no contacts found', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { data: [], total: 0 },
+    });
+
+    const result = await contactTools.zero_resolve_contacts.handler({ ids: ['ct-unknown'] });
+    const text = result.content[0].text;
+
+    expect(text).toContain('No contacts found');
+  });
+
+  it('deduplicates input IDs', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', createdAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+
+    await contactTools.zero_resolve_contacts.handler({ ids: ['ct-1', 'ct-1', 'ct-1'] });
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    // Should deduplicate to single ID
+    expect(callParams.where).toBe(JSON.stringify({ id: { $in: ['ct-1'] } }));
+    expect(callParams.limit).toBe('1');
+  });
+});
+
+// ─── 39. Calendar events with include contacts (fallback) ─────────────────────
+
+describe('zero_list_calendar_events — include contacts (fallback)', () => {
+  it('resolves contacts manually when excludeNullDates adds where clause', async () => {
+    // With excludeNullDates default, a where clause is added, triggering fallback.
+    // Call 1: fetch events (no relation fields in request)
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Sales call', startTime: '2024-06-15T09:00:00Z', endTime: '2024-06-15T09:30:00Z',
+            location: 'Zoom', contactIds: ['ct-1'], companyIds: ['co-1'],
+            createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z',
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+    // Call 2: resolve contacts by ID
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
+        ],
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({ include: ['contacts'] });
+    const text = result.content[0].text;
+
+    // First call should NOT have contacts.* in fields (fallback mode)
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.fields).toBeUndefined();
+
+    // Second call should be contacts bulk fetch
+    expect(mockGet.mock.calls[1][0]).toBe('/api/contacts');
+    const contactParams = mockGet.mock.calls[1][1].params;
+    expect(contactParams.where).toBe(JSON.stringify({ id: { $in: ['ct-1'] } }));
+
+    // Verify contacts are rendered
+    expect(text).toContain('Contacts (1)');
+    expect(text).toContain('Jane Doe');
+    expect(text).toContain('jane@acme.com');
+    expect(result).not.toHaveProperty('isError');
+  });
+
+  it('resolves contacts and companies in parallel with explicit where', async () => {
+    // Call 1: fetch events
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Client meeting', startTime: '2026-02-05T14:00:00Z',
+            contactIds: ['ct-1', 'ct-2'], companyIds: ['co-1'],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+        ],
+        total: 1,
+      },
+    });
+    // Call 2: resolve contacts
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Alice', lastName: 'B', email: 'alice@co.com', title: 'CEO' },
+          { id: 'ct-2', firstName: 'Bob', lastName: 'C', email: 'bob@co.com', title: 'CTO' },
+        ],
+      },
+    });
+    // Call 3: resolve companies
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'co-1', name: 'Acme Corp', domain: 'acme.com' },
+        ],
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      include: ['contacts', 'companies'],
+      where: { startTime: { $between: ['2026-02-02', '2026-02-08'] } },
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Contacts (2)');
+    expect(text).toContain('Alice B');
+    expect(text).toContain('Bob C');
+    expect(text).toContain('Companies (1)');
+    expect(text).toContain('Acme Corp');
+    expect(result).not.toHaveProperty('isError');
+  });
+
+  it('uses direct API include when no where or orderBy (excludeNullDates false)', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Team sync', startTime: '2024-06-15T09:00:00Z',
+            contactIds: ['ct-1'], companyIds: [],
+            createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z',
+            contacts: [
+              { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
+            ],
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      include: ['contacts'],
+      excludeNullDates: false,
+    });
+    const text = result.content[0].text;
+
+    // Should use direct API include (single call with relation fields)
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.fields).toContain('contacts.id');
+    expect(callParams.fields).toContain('contacts.firstName');
+    expect(text).toContain('Contacts (1)');
+    expect(text).toContain('Jane Doe');
+  });
+
+  it('handles fallback gracefully when contact resolution fails', async () => {
+    // Call 1: fetch events
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Resilient event', startTime: '2024-06-15T09:00:00Z',
+            contactIds: ['ct-1'], companyIds: [],
+            createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z',
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
+    // Call 2: contact resolution fails
+    mockGet.mockRejectedValueOnce(new Error('API error'));
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({ include: ['contacts'] });
+    const text = result.content[0].text;
+
+    // Event should still be returned even though contact resolution failed
+    expect(text).toContain('Resilient event');
+    expect(result).not.toHaveProperty('isError');
+  });
+});
+
+// ─── 40. $gte+$lte auto-transforms to $between ──────────────────────────────
+
+describe('buildQueryParams — $between auto-transform', () => {
+  it('transforms $gte+$lte into $between', () => {
+    const params = buildQueryParams({
+      workspaceId: WORKSPACE_ID,
+      where: { startTime: { $gte: '2026-02-02', $lte: '2026-02-08' } },
+    });
+    const where = JSON.parse(params.where);
+    expect(where.startTime).toEqual({ $between: ['2026-02-02', '2026-02-08'] });
+  });
+
+  it('transforms $gte+$lt into $between', () => {
+    const params = buildQueryParams({
+      workspaceId: WORKSPACE_ID,
+      where: { time: { $gte: '2026-02-03', $lt: '2026-02-10' } },
+    });
+    const where = JSON.parse(params.where);
+    expect(where.time).toEqual({ $between: ['2026-02-03', '2026-02-10'] });
+  });
+
+  it('preserves single $gte without $lte', () => {
+    const params = buildQueryParams({
+      workspaceId: WORKSPACE_ID,
+      where: { createdAt: { $gte: '2026-01-01' } },
+    });
+    const where = JSON.parse(params.where);
+    expect(where.createdAt).toEqual({ $gte: '2026-01-01' });
+  });
+
+  it('preserves non-object conditions', () => {
+    const params = buildQueryParams({
+      workspaceId: WORKSPACE_ID,
+      where: { status: 'open', name: { $contains: 'test' } },
+    });
+    const where = JSON.parse(params.where);
+    expect(where.status).toBe('open');
+    expect(where.name).toEqual({ $contains: 'test' });
+  });
+});
+
+// ─── 41. Get contact with response unwrapping ────────────────────────────────
+
+describe('zero_get_contact — response unwrapping', () => {
+  it('handles wrapped response { data: contact }', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com',
+          title: 'CTO', linkedin: 'https://linkedin.com/in/janedoe',
+          company: { id: 'co-1', name: 'Acme Corp' },
+          createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-06-01T00:00:00Z',
+        },
+      },
+    });
+
+    const result = await contactTools.zero_get_contact.handler({ id: 'ct-1' });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Jane Doe');
+    expect(text).toContain('jane@acme.com');
+    expect(text).toContain('linkedin.com/in/janedoe');
+    expect(text).toContain('Acme Corp');
+    expect(result).not.toHaveProperty('isError');
+  });
+
+  it('handles unwrapped response (contact directly)', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        id: 'ct-2', firstName: 'John', lastName: 'Smith', email: 'john@corp.com',
+        createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-06-01T00:00:00Z',
+      },
+    });
+
+    const result = await contactTools.zero_get_contact.handler({ id: 'ct-2' });
+    const text = result.content[0].text;
+
+    expect(text).toContain('John Smith');
+    expect(text).toContain('john@corp.com');
     expect(result).not.toHaveProperty('isError');
   });
 });
