@@ -68,6 +68,8 @@ src/
 
 **Calendar event deduplication:** `zero_list_calendar_events` has a `deduplicate` param (default: `true`) that merges duplicate events sharing the same name + startTime (truncated to minute). Merged events union their array fields (`contactIds`, `companyIds`, `dealIds`, `userIds`, `attendeeEmails`). The output header shows duplicate count when dedup is active.
 
+**Calendar event fetchAll:** `zero_list_calendar_events` supports `fetchAll: true` to auto-paginate through all matching events (page size 200, safety cap 500). When `fetchAll` is true, `limit`/`offset` are ignored. Use with a date range filter. When combined with `include: ["contacts"]` and 2+ events, a unique contacts summary is appended at the bottom, separating named contacts from email-only contacts.
+
 **Legacy params:** `includeCompany` (contacts) and `includeRelations` (deals) still work when `include` is absent. When `include` is provided, it supersedes them.
 
 ## Design Principles

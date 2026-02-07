@@ -107,20 +107,58 @@ async function resolveCalendarEventIncludes(
   await Promise.all(resolvePromises);
 }
 
+/**
+ * Builds a unique contacts summary section for multi-event results.
+ * Separates named contacts from email-only contacts.
+ */
+function buildUniqueContactsSummary(events: CalendarEvent[]): string {
+  const contactMap = new Map<string, Record<string, unknown>>();
+  for (const event of events) {
+    const contacts = (event as unknown as Record<string, unknown>).contacts as Record<string, unknown>[] | undefined;
+    if (!contacts) continue;
+    for (const c of contacts) {
+      if (c.id && !contactMap.has(c.id as string)) {
+        contactMap.set(c.id as string, c);
+      }
+    }
+  }
+  if (contactMap.size === 0) return '';
+
+  const named: Record<string, unknown>[] = [];
+  const emailOnly: Record<string, unknown>[] = [];
+  for (const c of contactMap.values()) {
+    if (c.firstName || c.lastName) {
+      named.push(c);
+    } else {
+      emailOnly.push(c);
+    }
+  }
+
+  let summary = `\n### Unique Contacts Met (${contactMap.size})\n`;
+  for (const c of named) {
+    summary += `- ${c.firstName || ''} ${c.lastName || ''} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}\n`;
+  }
+  for (const c of emailOnly) {
+    summary += `- ${c.email || 'N/A'} (unresolved attendee)\n`;
+  }
+  return summary;
+}
+
 export const calendarEventTools = {
   zero_list_calendar_events: {
-    description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Date range filter: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}. Single-bound filter: {"startTime": {"$gte": "2026-02-03"}}. By default, events with no start time are excluded (set excludeNullDates: false to include them). Tip: To find contacts you met this week, use where: {"startTime": {"$between": [...]}} with include: ["contacts"].',
+    description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Date range filter: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}. Single-bound filter: {"startTime": {"$gte": "2026-02-03"}}. By default, events with no start time are excluded (set excludeNullDates: false to include them). Use fetchAll: true with a date range to get all events (auto-paginates, max 500). Workflow: "Who did I meet this week?" → where + fetchAll: true + include: ["contacts"] returns all events with a unique contacts summary.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions. Array fields use $contains: {"contactIds": {"$contains": "uuid"}}. Date ranges use $between: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().optional().default(20).describe('Max records to return (default: 20). Ignored when fetchAll is true.'),
+      offset: z.number().optional().default(0).describe('Pagination offset. Ignored when fetchAll is true.'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"startTime": "asc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
-      include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, companies, tasks. Use include: ["contacts"] to get full contact details instead of just IDs.'),
+      include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, companies, tasks. Use include: ["contacts"] to get full contact details instead of just IDs. When listing 2+ events, a unique contacts summary is appended.'),
       excludeNullDates: z.boolean().optional().default(true).describe('Exclude events with no start time (default: true). Set false to include all.'),
       deduplicate: z.boolean().optional().default(true).describe('Merge duplicate events (same name + start time to the minute). Unions contactIds, companyIds, dealIds, userIds, attendeeEmails. Default: true.'),
+      fetchAll: z.boolean().optional().describe('Auto-paginate to fetch all matching events (max 500). Use with a date range filter. When true, limit/offset are ignored.'),
     }),
-    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; include?: string[]; excludeNullDates?: boolean; deduplicate?: boolean }) => {
+    handler: async (args: { where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Record<string, 'asc' | 'desc'>; fields?: string; include?: string[]; excludeNullDates?: boolean; deduplicate?: boolean; fetchAll?: boolean }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
@@ -143,9 +181,98 @@ export const calendarEventTools = {
           fields = buildIncludeFields('calendarEvent', args.include, fields);
         }
 
+        const dedupEnabled = args.deduplicate !== false;
+        const FETCH_ALL_PAGE_SIZE = 200;
+        const FETCH_ALL_CAP = 500;
+
+        let allEvents: CalendarEvent[];
+
+        if (args.fetchAll) {
+          // Auto-paginate through all results
+          allEvents = [];
+          let currentOffset = 0;
+          let hasMore = true;
+
+          while (hasMore && allEvents.length < FETCH_ALL_CAP) {
+            const params = buildQueryParams({
+              workspaceId,
+              where,
+              limit: FETCH_ALL_PAGE_SIZE,
+              offset: currentOffset,
+              orderBy: args.orderBy,
+              fields,
+            });
+
+            const response = await client.get<ApiListResponse<CalendarEvent>>('/api/calendarEvents', { params });
+            const pageEvents = response.data.data || [];
+            allEvents.push(...pageEvents);
+            currentOffset += pageEvents.length;
+            hasMore = pageEvents.length === FETCH_ALL_PAGE_SIZE;
+          }
+
+          // Trim to safety cap
+          const hitCap = allEvents.length > FETCH_ALL_CAP;
+          if (hitCap) {
+            allEvents = allEvents.slice(0, FETCH_ALL_CAP);
+          }
+
+          // Manually resolve included relations in fallback mode
+          if (useIncludeFallback && allEvents.length > 0) {
+            await resolveCalendarEventIncludes(client, workspaceId, allEvents, args.include!);
+          }
+
+          // Deduplicate
+          let displayEvents = allEvents;
+          let duplicatesRemoved = 0;
+          if (dedupEnabled && allEvents.length > 0) {
+            const dedupResult = deduplicateCalendarEvents(allEvents);
+            displayEvents = dedupResult.events;
+            duplicatesRemoved = dedupResult.duplicatesRemoved;
+          }
+
+          if (displayEvents.length === 0) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: 'No calendar events found matching your criteria.',
+              }],
+            };
+          }
+
+          const dedupNote = duplicatesRemoved > 0 ? ` (${duplicatesRemoved} duplicates merged)` : '';
+          let markdown = `## Calendar Events (${displayEvents.length}${dedupNote})
+
+${displayEvents.map((ev, i) => {
+  const start = ev.startTime ? new Date(ev.startTime).toLocaleString() : 'N/A';
+  const end = ev.endTime ? new Date(ev.endTime).toLocaleString() : '';
+  return `### ${i + 1}. ${ev.name || 'Untitled'}
+- **ID:** ${ev.id}
+- **When:** ${start}${end ? ` to ${end}` : ''}
+- **Location:** ${ev.location || 'N/A'}
+${ev.userIds?.length ? `- **User IDs:** ${ev.userIds.join(', ')}` : ''}
+${ev.dealIds?.length ? `- **Deal IDs:** ${ev.dealIds.join(', ')}` : ''}
+${ev.companyIds?.length ? `- **Company IDs:** ${ev.companyIds.join(', ')}` : ''}
+${ev.contactIds?.length ? `- **Contact IDs:** ${ev.contactIds.join(', ')}` : ''}
+${args.include && args.include.length > 0 ? formatIncludedRelations('calendarEvent', ev as unknown as Record<string, unknown>, args.include) : ''}`;
+}).join('\n')}
+${hitCap ? `\n*Results truncated at ${FETCH_ALL_CAP} events. Add stricter filters to narrow results.*` : ''}`;
+
+          // Unique contacts summary for multi-event results (use pre-dedup events for complete data)
+          if (args.include?.includes('contacts') && displayEvents.length >= 2) {
+            markdown += buildUniqueContactsSummary(allEvents);
+          }
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: markdown,
+            }],
+          };
+        }
+
+        // Standard (non-fetchAll) path
         const limit = args.limit || 20;
         const offset = args.offset || 0;
-        const dedupEnabled = args.deduplicate !== false;
 
         // When dedup is enabled, over-fetch to compensate for duplicates being merged
         const fetchLimit = dedupEnabled ? limit * 2 : limit;
@@ -197,7 +324,7 @@ export const calendarEventTools = {
         }
 
         const dedupNote = duplicatesRemoved > 0 ? ` (${duplicatesRemoved} duplicates merged)` : '';
-        const markdown = `## Calendar Events (${displayEvents.length}${dedupNote})
+        let markdown = `## Calendar Events (${displayEvents.length}${dedupNote})
 
 ${displayEvents.map((ev, i) => {
   const start = ev.startTime ? new Date(ev.startTime).toLocaleString() : 'N/A';
@@ -213,6 +340,11 @@ ${ev.contactIds?.length ? `- **Contact IDs:** ${ev.contactIds.join(', ')}` : ''}
 ${args.include && args.include.length > 0 ? formatIncludedRelations('calendarEvent', ev as unknown as Record<string, unknown>, args.include) : ''}`;
 }).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
+
+        // Unique contacts summary for multi-event results (use pre-dedup events for complete data)
+        if (args.include?.includes('contacts') && displayEvents.length >= 2) {
+          markdown += buildUniqueContactsSummary(events);
+        }
 
         return {
           content: [{

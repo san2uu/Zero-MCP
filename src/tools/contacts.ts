@@ -5,7 +5,7 @@ import { buildIncludeFields, formatIncludedRelations } from '../services/relatio
 
 export const contactTools = {
   zero_list_contacts: {
-    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}). Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]). Tip: To find contacts with recent meetings, first use zero_list_calendar_events with a date filter and include: ["contacts"], then use zero_resolve_contacts to get full details.',
+    description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}). Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]). Tip: To find contacts with recent meetings, use zero_list_calendar_events with a date filter, fetchAll: true, and include: ["contacts"] — a unique contacts summary is appended automatically.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"})'),
       limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),

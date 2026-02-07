@@ -1912,3 +1912,227 @@ describe('formatIncludedRelations — email-only contacts', () => {
   });
 });
 
+// ─── 44. fetchAll paginates through multiple pages ────────────────────────────
+
+describe('zero_list_calendar_events — fetchAll', () => {
+  it('paginates through multiple pages', async () => {
+    // Page 1: 200 events
+    const page1 = Array.from({ length: 200 }, (_, i) => ({
+      id: `ev-${i}`, name: `Event ${i}`, startTime: `2026-02-05T${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00Z`,
+      contactIds: [], companyIds: [], dealIds: [], userIds: [],
+      createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+    }));
+    mockGet.mockResolvedValueOnce({
+      data: { data: page1, total: 250 },
+    });
+    // Page 2: 50 events (last page)
+    const page2 = Array.from({ length: 50 }, (_, i) => ({
+      id: `ev-${200 + i}`, name: `Event ${200 + i}`, startTime: `2026-02-06T${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00Z`,
+      contactIds: [], companyIds: [], dealIds: [], userIds: [],
+      createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+    }));
+    mockGet.mockResolvedValueOnce({
+      data: { data: page2, total: 250 },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      fetchAll: true,
+    });
+    const text = result.content[0].text;
+
+    // Should have fetched 2 pages
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    // First page: limit=200, offset=0
+    expect(mockGet.mock.calls[0][1].params.limit).toBe('200');
+    expect(mockGet.mock.calls[0][1].params.offset).toBe('0');
+    // Second page: limit=200, offset=200
+    expect(mockGet.mock.calls[1][1].params.limit).toBe('200');
+    expect(mockGet.mock.calls[1][1].params.offset).toBe('200');
+    // All 250 events displayed
+    expect(text).toContain('Calendar Events (250');
+    expect(text).not.toContain('truncated');
+  });
+
+  it('stops at 500-event safety cap', async () => {
+    // 3 pages of 200 = 600 total, but should cap at 500
+    for (let page = 0; page < 3; page++) {
+      const events = Array.from({ length: 200 }, (_, i) => ({
+        id: `ev-${page * 200 + i}`, name: `Event ${page * 200 + i}`, startTime: `2026-02-0${page + 1}T${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00Z`,
+        contactIds: [], companyIds: [], dealIds: [], userIds: [],
+        createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+      }));
+      mockGet.mockResolvedValueOnce({
+        data: { data: events, total: 600 },
+      });
+    }
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      fetchAll: true,
+      deduplicate: false,
+    });
+    const text = result.content[0].text;
+
+    // Should show truncation warning
+    expect(text).toContain('Calendar Events (500');
+    expect(text).toContain('truncated at 500 events');
+  });
+
+  it('ignores limit/offset when fetchAll is true', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ev-1', name: 'Event 1', startTime: '2026-02-05T09:00:00Z', contactIds: [], companyIds: [], dealIds: [], userIds: [], createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z' },
+        ],
+        total: 1,
+      },
+    });
+
+    await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      fetchAll: true,
+      limit: 5,
+      offset: 10,
+    });
+
+    // Should use page size 200 and offset 0, ignoring limit=5 and offset=10
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.limit).toBe('200');
+    expect(callParams.offset).toBe('0');
+  });
+});
+
+// ─── 45. Unique contacts summary ──────────────────────────────────────────────
+
+describe('zero_list_calendar_events — unique contacts summary', () => {
+  it('shows unique contacts summary for 2+ events with include contacts', async () => {
+    // Call 1: fetch events
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Meeting A', startTime: '2026-02-05T09:00:00Z',
+            contactIds: ['ct-1', 'ct-2'], companyIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+          {
+            id: 'ev-2', name: 'Meeting B', startTime: '2026-02-06T10:00:00Z',
+            contactIds: ['ct-2', 'ct-3'], companyIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+        ],
+        total: 2,
+      },
+    });
+    // Call 2: resolve contacts
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Alice', lastName: 'A', email: 'alice@co.com', title: 'CEO' },
+          { id: 'ct-2', firstName: 'Bob', lastName: 'B', email: 'bob@co.com', title: 'CTO' },
+          { id: 'ct-3', firstName: '', lastName: '', email: 'ext@partner.com', title: '' },
+        ],
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      include: ['contacts'],
+    });
+    const text = result.content[0].text;
+
+    // Should have unique contacts summary
+    expect(text).toContain('Unique Contacts Met (3)');
+    expect(text).toContain('Alice A');
+    expect(text).toContain('Bob B');
+    expect(text).toContain('ext@partner.com (unresolved attendee)');
+  });
+
+  it('does not show summary for single event', async () => {
+    // Call 1: fetch events
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Solo Meeting', startTime: '2026-02-05T09:00:00Z',
+            contactIds: ['ct-1'], companyIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+        ],
+        total: 1,
+      },
+    });
+    // Call 2: resolve contacts
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Alice', lastName: 'A', email: 'alice@co.com', title: 'CEO' },
+        ],
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      include: ['contacts'],
+    });
+    const text = result.content[0].text;
+
+    // Should NOT have unique contacts summary (only 1 event)
+    expect(text).not.toContain('Unique Contacts Met');
+  });
+
+  it('shows unique contacts summary with fetchAll + include + deduplicate', async () => {
+    // Page 1: 2 events with overlapping contacts
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 'ev-1', name: 'Meeting A', startTime: '2026-02-05T09:00:00Z',
+            contactIds: ['ct-1'], companyIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+          {
+            id: 'ev-2', name: 'Meeting A', startTime: '2026-02-05T09:00:00Z',
+            contactIds: ['ct-2'], companyIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+          {
+            id: 'ev-3', name: 'Meeting B', startTime: '2026-02-06T10:00:00Z',
+            contactIds: ['ct-1', 'ct-3'], companyIds: [],
+            createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z',
+          },
+        ],
+        total: 3,
+      },
+    });
+    // Resolve contacts
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'ct-1', firstName: 'Alice', lastName: 'A', email: 'alice@co.com', title: 'CEO' },
+          { id: 'ct-2', firstName: 'Bob', lastName: 'B', email: 'bob@co.com', title: '' },
+          { id: 'ct-3', firstName: 'Carol', lastName: 'C', email: 'carol@co.com', title: 'VP' },
+        ],
+      },
+    });
+
+    const result = await calendarEventTools.zero_list_calendar_events.handler({
+      where: { startTime: { $gte: '2026-02-01' } },
+      fetchAll: true,
+      include: ['contacts'],
+      deduplicate: true,
+    });
+    const text = result.content[0].text;
+
+    // Dedup merges ev-1+ev-2 into one "Meeting A", so 2 display events
+    expect(text).toContain('Calendar Events (2');
+    expect(text).toContain('1 duplicates merged');
+    // Unique contacts summary across 2 display events
+    expect(text).toContain('Unique Contacts Met (3)');
+    expect(text).toContain('Alice A');
+    expect(text).toContain('Bob B');
+    expect(text).toContain('Carol C');
+  });
+});
+
