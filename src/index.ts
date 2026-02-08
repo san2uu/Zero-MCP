@@ -360,6 +360,12 @@ server.tool(
 );
 
 async function main() {
+  // Validate required environment variables at startup
+  if (!process.env.ZERO_API_KEY) {
+    console.error('Fatal error: ZERO_API_KEY environment variable is required');
+    process.exit(1);
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Zero MCP Server running on stdio');

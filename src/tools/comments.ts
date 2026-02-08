@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { Comment, ApiListResponse } from '../types.js';
 
 function formatContent(value: unknown): string {
@@ -13,8 +13,8 @@ export const commentTools = {
     description: 'List comments in Zero CRM with optional filtering and pagination. Filter examples: {"companyId": "uuid"}, {"contactId": "uuid"}, {"dealId": "uuid"}, {"taskId": "uuid"}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"dealId": "uuid"})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"createdAt": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
@@ -54,7 +54,7 @@ ${comments.map((c, i) => `### ${i + 1}. Comment
 - **ID:** ${c.id}
 - **Content:** ${formatContent(c.content)}
 - **Author:** ${c.authorId || 'N/A'}
-- **Created:** ${new Date(c.createdAt).toLocaleDateString()}
+- **Created:** ${formatDate(c.createdAt, 'date')}
 `).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -79,7 +79,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_comment: {
     description: 'Get a single comment by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The comment ID'),
+      id: z.string().uuid().describe('The comment ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { id: string; fields?: string }) => {
@@ -100,8 +100,8 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Author:** ${comment.authorId || 'N/A'}
 
 ### Timestamps
-- **Created:** ${new Date(comment.createdAt).toLocaleString()}
-- **Updated:** ${new Date(comment.updatedAt).toLocaleString()}`;
+- **Created:** ${formatDate(comment.createdAt)}
+- **Updated:** ${formatDate(comment.updatedAt)}`;
 
         return {
           content: [{
@@ -148,7 +148,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
             text: `## Comment Created Successfully
 
 **ID:** ${comment.id}
-**Created:** ${new Date(comment.createdAt).toLocaleString()}`,
+**Created:** ${formatDate(comment.createdAt)}`,
           }],
         };
       } catch (error) {
@@ -166,7 +166,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_update_comment: {
     description: 'Update an existing comment in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The comment ID to update'),
+      id: z.string().uuid().describe('The comment ID to update'),
       content: z.union([z.string(), z.record(z.unknown())]).optional().describe('Comment content'),
     }),
     handler: async (args: { id: string; content?: string | Record<string, unknown> }) => {
@@ -189,7 +189,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
             text: `## Comment Updated Successfully
 
 **ID:** ${comment.id}
-**Updated:** ${new Date(comment.updatedAt).toLocaleString()}`,
+**Updated:** ${formatDate(comment.updatedAt)}`,
           }],
         };
       } catch (error) {
@@ -207,13 +207,15 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_delete_comment: {
     description: 'Delete a comment in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The comment ID to delete'),
+      id: z.string().uuid().describe('The comment ID to delete'),
     }),
     handler: async (args: { id: string }) => {
       try {
+        const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
-        await client.delete(`/api/comments/${args.id}`);
+        const params: Record<string, string> = { workspaceId };
+        await client.delete(`/api/comments/${args.id}`, { params });
 
         return {
           content: [{

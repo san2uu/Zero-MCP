@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AxiosInstance } from 'axios';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { CalendarEvent, ApiListResponse } from '../types.js';
 import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
 
@@ -149,8 +149,8 @@ export const calendarEventTools = {
     description: 'List calendar events (meetings) in Zero CRM. Each event has dealIds, companyIds, contactIds (plural arrays) and userIds (workspace members) for entity association. Filter by array fields using $contains: {"contactIds": {"$contains": "uuid"}}. Date range filter: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}. Single-bound filter: {"startTime": {"$gte": "2026-02-03"}}. By default, events with no start time are excluded (set excludeNullDates: false to include them). Use fetchAll: true with a date range to get all events (auto-paginates, max 500). Workflow: "Who did I meet this week?" → where + fetchAll: true + include: ["contacts"] returns all events with a unique contacts summary.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions. Array fields use $contains: {"contactIds": {"$contains": "uuid"}}. Date ranges use $between: {"startTime": {"$between": ["2026-02-02", "2026-02-08"]}}'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20). Ignored when fetchAll is true.'),
-      offset: z.number().optional().default(0).describe('Pagination offset. Ignored when fetchAll is true.'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000). Ignored when fetchAll is true.'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0). Ignored when fetchAll is true.'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"startTime": "asc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
       include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, companies, tasks. Use include: ["contacts"] to get full contact details instead of just IDs. When listing 2+ events, a unique contacts summary is appended.'),
@@ -205,9 +205,11 @@ export const calendarEventTools = {
 
             const response = await client.get<ApiListResponse<CalendarEvent>>('/api/calendarEvents', { params });
             const pageEvents = response.data.data || [];
+            const total = response.data.total;
             allEvents.push(...pageEvents);
             currentOffset += pageEvents.length;
-            hasMore = pageEvents.length === FETCH_ALL_PAGE_SIZE;
+            // Use total if available, otherwise check if we got a full page
+            hasMore = total ? currentOffset < total : pageEvents.length === FETCH_ALL_PAGE_SIZE;
           }
 
           // Trim to safety cap
@@ -243,8 +245,8 @@ export const calendarEventTools = {
           let markdown = `## Calendar Events (${displayEvents.length}${dedupNote})
 
 ${displayEvents.map((ev, i) => {
-  const start = ev.startTime ? new Date(ev.startTime).toLocaleString() : 'N/A';
-  const end = ev.endTime ? new Date(ev.endTime).toLocaleString() : '';
+  const start = formatDate(ev.startTime);
+  const end = ev.endTime ? formatDate(ev.endTime) : '';
   return `### ${i + 1}. ${ev.name || 'Untitled'}
 - **ID:** ${ev.id}
 - **When:** ${start}${end ? ` to ${end}` : ''}
@@ -327,8 +329,8 @@ ${hitCap ? `\n*Results truncated at ${FETCH_ALL_CAP} events. Add stricter filter
         let markdown = `## Calendar Events (${displayEvents.length}${dedupNote})
 
 ${displayEvents.map((ev, i) => {
-  const start = ev.startTime ? new Date(ev.startTime).toLocaleString() : 'N/A';
-  const end = ev.endTime ? new Date(ev.endTime).toLocaleString() : '';
+  const start = formatDate(ev.startTime);
+  const end = ev.endTime ? formatDate(ev.endTime) : '';
   return `### ${i + 1}. ${ev.name || 'Untitled'}
 - **ID:** ${ev.id}
 - **When:** ${start}${end ? ` to ${end}` : ''}
@@ -367,7 +369,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_calendar_event: {
     description: 'Get a single calendar event by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The calendar event ID'),
+      id: z.string().uuid().describe('The calendar event ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
       include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, companies, tasks'),
     }),
@@ -390,8 +392,8 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         const response = await client.get(`/api/calendarEvents/${args.id}`, { params });
         const event: CalendarEvent = response.data.data || response.data;
 
-        const start = event.startTime ? new Date(event.startTime).toLocaleString() : 'N/A';
-        const end = event.endTime ? new Date(event.endTime).toLocaleString() : 'N/A';
+        const start = formatDate(event.startTime);
+        const end = formatDate(event.endTime);
 
         let markdown = `## ${event.name || 'Untitled'}
 
@@ -411,8 +413,8 @@ ${event.companyIds?.length ? `- **Company IDs:** ${event.companyIds.join(', ')}`
 ${event.contactIds?.length ? `- **Contact IDs:** ${event.contactIds.join(', ')}` : '- **Contacts:** None'}
 
 ### Timestamps
-- **Created:** ${new Date(event.createdAt).toLocaleString()}
-- **Updated:** ${new Date(event.updatedAt).toLocaleString()}`;
+- **Created:** ${formatDate(event.createdAt)}
+- **Updated:** ${formatDate(event.updatedAt)}`;
 
         if (args.include && args.include.length > 0) {
           markdown += formatIncludedRelations('calendarEvent', event as unknown as Record<string, unknown>, args.include);

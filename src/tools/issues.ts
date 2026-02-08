@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { Issue, ApiListResponse } from '../types.js';
 
 function formatContent(value: unknown): string {
@@ -13,8 +13,8 @@ export const issueTools = {
     description: 'List issues (Slack messages synced via Pylon/Plain) in Zero CRM with optional filtering and pagination. Each issue has companyIds, contactIds (plural arrays) for entity association. Filter examples: {"companyIds": {"$contains": "uuid"}}, {"contactIds": {"$contains": "uuid"}}, {"status": "open"}, {"createdAt": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"companyIds": {"$contains": "uuid"}}, {"createdAt": {"$gte": "2026-02-03"}})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"createdAt": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
@@ -85,7 +85,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_issue: {
     description: 'Get a single issue (Slack message) by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The issue ID'),
+      id: z.string().uuid().describe('The issue ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { id: string; fields?: string }) => {

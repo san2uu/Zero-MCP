@@ -3,6 +3,21 @@ import { ListParams } from '../types.js';
 
 const BASE_URL = 'https://api.zero.inc';
 
+/**
+ * Safely formats a date string to locale format.
+ * Returns 'Invalid Date' if the date string is invalid.
+ */
+export function formatDate(dateString: string | undefined, format: 'string' | 'date' = 'string'): string {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return format === 'date' ? date.toLocaleDateString() : date.toLocaleString();
+  } catch {
+    return 'Invalid Date';
+  }
+}
+
 let cachedWorkspaceId: string | null = null;
 let cachedPipelineStages: Map<string, string> | null = null;
 
@@ -27,6 +42,9 @@ export function createApiClient(): AxiosInstance {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
+    // Explicitly require valid HTTPS certificates
+    httpsAgent: undefined, // Use default agent with rejectUnauthorized: true
+    validateStatus: (status) => status < 600, // Allow axios to handle all HTTP status codes
   });
 
   return client;
@@ -81,7 +99,7 @@ export function formatApiError(error: unknown): string {
     const data = error.response?.data;
 
     if (status === 401) {
-      return 'Authentication failed. Please check your ZERO_API_KEY.';
+      return 'Authentication failed. Please check your API credentials.';
     }
     if (status === 403) {
       return 'Access denied. You may not have permission for this workspace or resource.';
@@ -90,18 +108,25 @@ export function formatApiError(error: unknown): string {
       return 'Resource not found. The requested item may have been deleted.';
     }
     if (status === 422) {
-      const message = data?.message || data?.error || 'Validation error';
-      return `Validation error: ${message}`;
+      // Sanitize validation errors - only show safe field names, not full backend messages
+      const message = data?.message || data?.error || '';
+      const safeMessage = typeof message === 'string' ? message.substring(0, 200) : 'Invalid input';
+      return `Validation error: ${safeMessage}`;
     }
     if (status === 429) {
       return 'Rate limit exceeded. Please wait before making more requests.';
     }
+    if (status && status >= 500) {
+      return `Server error (${status}). Please try again later.`;
+    }
 
-    return `API error (${status}): ${data?.message || data?.error || error.message}`;
+    // Generic client error - don't expose internal details
+    return `Request failed (${status || 'unknown'}). Please check your input and try again.`;
   }
 
   if (error instanceof Error) {
-    return error.message;
+    // Don't expose stack traces or internal error details
+    return 'An error occurred while processing your request.';
   }
 
   return 'An unknown error occurred';

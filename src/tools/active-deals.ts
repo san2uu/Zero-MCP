@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, resolveStageName, fetchCompaniesByIds } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, resolveStageName, fetchCompaniesByIds, formatDate } from '../services/api.js';
 import { Deal, Activity, EmailThread, CalendarEvent, Issue, ApiListResponse } from '../types.js';
 
 interface ActivitySummary {
@@ -28,7 +28,7 @@ export const activeDealTools = {
       until: z.string().optional().describe('ISO date string — only include activity before this date (exclusive). Defaults to now.'),
       sources: z.array(z.enum(['activities', 'emailThreads', 'calendarEvents', 'issues'])).optional().describe('Which activity sources to query. Defaults to all: activities, emailThreads, calendarEvents, issues.'),
       dealWhere: z.record(z.unknown()).optional().describe('Additional filter on the deals themselves (e.g., {"stage": "<stage_id>"} to only show active-stage deals)'),
-      limit: z.number().optional().default(200).describe('Max activity records to fetch per source (default: 200)'),
+      limit: z.number().int().min(1).max(1000).optional().default(200).describe('Max activity records to fetch per source (default: 200, max: 1000)'),
     }),
     handler: async (args: {
       since: string;
@@ -65,10 +65,10 @@ export const activeDealTools = {
 
           try {
             const response = await client.get<ApiListResponse<{ id: string; companyIds?: string[]; [key: string]: unknown }>>(`/api/${source}`, { params });
-            return { source, data: response.data.data || [], total: response.data.total };
-          } catch {
-            // If a source fails (e.g., issues endpoint doesn't exist yet), skip it
-            return { source, data: [], total: 0 };
+            return { source, data: response.data.data || [], total: response.data.total, error: false };
+          } catch (error) {
+            // If a source fails (e.g., issues endpoint doesn't exist yet), skip it but flag as error
+            return { source, data: [], total: 0, error: true };
           }
         });
 
@@ -112,11 +112,13 @@ export const activeDealTools = {
         }
 
         if (companySummaries.size === 0) {
-          const checkedSources = sourceResults.map((r) => `${r.source}: ${r.data.length} records`).join(', ');
+          const checkedSources = sourceResults.map((r) => `${r.source}: ${r.error ? 'FAILED' : `${r.data.length} records`}`).join(', ');
+          const failedSources = sourceResults.filter((r) => r.error).map((r) => r.source);
+          const warningText = failedSources.length > 0 ? `\n\n⚠️ Warning: Failed to query ${failedSources.join(', ')}` : '';
           return {
             content: [{
               type: 'text' as const,
-              text: `No deals found with activity since ${args.since}.\n\nSources checked: ${checkedSources}`,
+              text: `No deals found with activity since ${args.since}.\n\nSources checked: ${checkedSources}${warningText}`,
             }],
           };
         }
@@ -177,6 +179,13 @@ export const activeDealTools = {
           return location ? `${enriched.name} (${location})` : enriched.name;
         };
 
+        const formatConfidence = (confidence: string | undefined) => {
+          if (!confidence) return 'N/A';
+          const parsed = parseFloat(confidence);
+          if (isNaN(parsed)) return 'N/A';
+          return `${Math.round(parsed * 100)}%`;
+        };
+
         const formatSummary = (summary: ActivitySummary) => {
           const parts: string[] = [];
           if (summary.activities > 0) parts.push(`${summary.activities} activit${summary.activities === 1 ? 'y' : 'ies'}`);
@@ -189,13 +198,17 @@ export const activeDealTools = {
         // Source stats
         const sourceStats = sourceResults.map((r) => {
           const label = r.source === 'emailThreads' ? 'emails' : r.source === 'calendarEvents' ? 'meetings' : r.source;
+          if (r.error) return `${label}: FAILED`;
           const truncated = r.total && r.total > r.data.length ? ` (truncated, ${r.total} total)` : '';
           return `${label}: ${r.data.length}${truncated}`;
         }).join(', ');
 
-        const markdown = `## Active Deals Since ${new Date(args.since).toLocaleDateString()} (${sortedDeals.length} deals)
+        const failedSources = sourceResults.filter((r) => r.error).map((r) => r.source);
+        const warningSection = failedSources.length > 0 ? `\n\n⚠️ **Warning:** Failed to query ${failedSources.join(', ')} — results may be incomplete.` : '';
 
-**Sources queried:** ${sourceStats}
+        const markdown = `## Active Deals Since ${formatDate(args.since, 'date')} (${sortedDeals.length} deals)
+
+**Sources queried:** ${sourceStats}${warningSection}
 
 ${sortedDeals.map((item, i) => {
   const { deal, stageName, summary } = item;
@@ -203,11 +216,11 @@ ${sortedDeals.map((item, i) => {
 - **ID:** ${deal.id}
 - **Value:** ${formatValue(deal)}
 - **Stage:** ${stageName}
-- **Confidence:** ${deal.confidence ? `${Math.round(parseFloat(deal.confidence) * 100)}%` : 'N/A'}
+- **Confidence:** ${formatConfidence(deal.confidence)}
 - **Close Date:** ${deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : 'N/A'}
 - **Company:** ${formatCompany(deal)}
 - **Recent Activity:** ${formatSummary(summary)}
-- **Last Activity:** ${summary.lastActivity ? new Date(summary.lastActivity).toLocaleString() : 'N/A'}
+- **Last Activity:** ${formatDate(summary.lastActivity)}
 `;
 }).join('\n')}`;
 

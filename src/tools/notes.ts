@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { Note, ApiListResponse } from '../types.js';
 
 function formatContent(value: unknown): string {
@@ -13,8 +13,8 @@ export const noteTools = {
     description: 'List notes in Zero CRM with optional filtering and pagination. Filter examples: {"companyId": "uuid"}, {"contactId": "uuid"}, {"dealId": "uuid"}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"companyId": "uuid"})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"createdAt": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
@@ -53,7 +53,7 @@ export const noteTools = {
 ${notes.map((n, i) => `### ${i + 1}. Note
 - **ID:** ${n.id}
 - **Content:** ${formatContent(n.content)}
-- **Created:** ${new Date(n.createdAt).toLocaleDateString()}
+- **Created:** ${formatDate(n.createdAt, 'date')}
 `).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
 
@@ -78,7 +78,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_note: {
     description: 'Get a single note by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The note ID'),
+      id: z.string().uuid().describe('The note ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { id: string; fields?: string }) => {
@@ -98,9 +98,9 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **Content:** ${formatContent(note.content)}
 
 ### Timestamps
-- **Created:** ${new Date(note.createdAt).toLocaleString()}
-- **Updated:** ${new Date(note.updatedAt).toLocaleString()}
-${note.archivedAt ? `- **Archived:** ${new Date(note.archivedAt).toLocaleString()}` : ''}`;
+- **Created:** ${formatDate(note.createdAt)}
+- **Updated:** ${formatDate(note.updatedAt)}
+${note.archivedAt ? `- **Archived:** ${formatDate(note.archivedAt)}` : ''}`;
 
         return {
           content: [{
@@ -146,7 +146,7 @@ ${note.archivedAt ? `- **Archived:** ${new Date(note.archivedAt).toLocaleString(
             text: `## Note Created Successfully
 
 **ID:** ${note.id}
-**Created:** ${new Date(note.createdAt).toLocaleString()}`,
+**Created:** ${formatDate(note.createdAt)}`,
           }],
         };
       } catch (error) {
@@ -164,7 +164,7 @@ ${note.archivedAt ? `- **Archived:** ${new Date(note.archivedAt).toLocaleString(
   zero_update_note: {
     description: 'Update an existing note in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The note ID to update'),
+      id: z.string().uuid().describe('The note ID to update'),
       content: z.union([z.string(), z.record(z.unknown())]).optional().describe('Note content'),
       companyId: z.string().optional().describe('Company ID'),
       contactId: z.string().optional().describe('Contact ID'),
@@ -208,14 +208,15 @@ ${note.archivedAt ? `- **Archived:** ${new Date(note.archivedAt).toLocaleString(
   zero_delete_note: {
     description: 'Delete or archive a note in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The note ID to delete'),
+      id: z.string().uuid().describe('The note ID to delete'),
       archive: z.boolean().optional().default(true).describe('If true, soft delete (archive). If false, permanently delete.'),
     }),
     handler: async (args: { id: string; archive?: boolean }) => {
       try {
+        const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
-        const params: Record<string, string> = {};
+        const params: Record<string, string> = { workspaceId };
         if (args.archive !== false) {
           params.archive = 'true';
         }

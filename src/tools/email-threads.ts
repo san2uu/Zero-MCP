@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { EmailThread, ApiListResponse } from '../types.js';
 
 export const emailThreadTools = {
@@ -7,8 +7,8 @@ export const emailThreadTools = {
     description: 'List email threads in Zero CRM. Each thread has dealIds, companyIds, contactIds fields for entity association. To find deals with recent emails, filter by lastEmailTime and collect dealIds values. Filter examples: {"lastEmailTime": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"lastEmailTime": {"$gte": "2026-02-03"}})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"lastEmailTime": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
@@ -48,7 +48,7 @@ ${threads.map((t, i) => `### ${i + 1}. ${t.subject || 'No subject'}
 - **ID:** ${t.id}
 - **Snippet:** ${t.snippet || 'N/A'}
 - **From:** ${t.fromEmails?.join(', ') || 'N/A'}
-- **Last Email:** ${t.lastEmailTime ? new Date(t.lastEmailTime).toLocaleString() : 'N/A'}
+- **Last Email:** ${formatDate(t.lastEmailTime)}
 ${t.dealIds?.length ? `- **Deal IDs:** ${t.dealIds.join(', ')}` : ''}
 ${t.companyIds?.length ? `- **Company IDs:** ${t.companyIds.join(', ')}` : ''}
 ${t.contactIds?.length ? `- **Contact IDs:** ${t.contactIds.join(', ')}` : ''}
@@ -76,7 +76,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_email_thread: {
     description: 'Get a single email thread by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The email thread ID'),
+      id: z.string().uuid().describe('The email thread ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { id: string; fields?: string }) => {

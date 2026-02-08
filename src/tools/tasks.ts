@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { Task, ApiListResponse } from '../types.js';
 
 function formatContent(value: unknown): string {
@@ -13,8 +13,8 @@ export const taskTools = {
     description: 'List tasks in Zero CRM with optional filtering and pagination. Filter examples: {"done": false}, {"dealId": "uuid"}, {"companyId": "uuid"}, {"contactId": "uuid"}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"done": false}, {"companyId": "uuid"})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"deadline": "asc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
@@ -52,10 +52,10 @@ export const taskTools = {
 
 ${tasks.map((t, i) => {
   const check = t.done ? '[x]' : '[ ]';
-  const deadline = t.deadline ? ` (due ${new Date(t.deadline).toLocaleDateString()})` : '';
+  const deadline = t.deadline ? ` (due ${formatDate(t.deadline, 'date')})` : '';
   return `### ${i + 1}. ${check} ${t.name}
 - **ID:** ${t.id}
-- **Description:** ${formatContent(t.description)}${deadline ? `\n- **Deadline:** ${new Date(t.deadline!).toLocaleDateString()}` : ''}
+- **Description:** ${formatContent(t.description)}${deadline ? `\n- **Deadline:** ${formatDate(t.deadline, 'date')}` : ''}
 `;
 }).join('\n')}
 ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next page.*` : ''}`;
@@ -81,7 +81,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_task: {
     description: 'Get a single task by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The task ID'),
+      id: z.string().uuid().describe('The task ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { id: string; fields?: string }) => {
@@ -101,12 +101,12 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **ID:** ${task.id}
 **Status:** ${task.done ? 'Complete' : 'Incomplete'}
 **Description:** ${formatContent(task.description)}
-${task.deadline ? `**Deadline:** ${new Date(task.deadline).toLocaleDateString()}` : ''}
+${task.deadline ? `**Deadline:** ${formatDate(task.deadline, 'date')}` : ''}
 
 ### Timestamps
-- **Created:** ${new Date(task.createdAt).toLocaleString()}
-- **Updated:** ${new Date(task.updatedAt).toLocaleString()}
-${task.archivedAt ? `- **Archived:** ${new Date(task.archivedAt).toLocaleString()}` : ''}`;
+- **Created:** ${formatDate(task.createdAt)}
+- **Updated:** ${formatDate(task.updatedAt)}
+${task.archivedAt ? `- **Archived:** ${formatDate(task.archivedAt)}` : ''}`;
 
         return {
           content: [{
@@ -157,7 +157,7 @@ ${task.archivedAt ? `- **Archived:** ${new Date(task.archivedAt).toLocaleString(
 
 **Name:** ${task.name}
 **ID:** ${task.id}
-**Created:** ${new Date(task.createdAt).toLocaleString()}`,
+**Created:** ${formatDate(task.createdAt)}`,
           }],
         };
       } catch (error) {
@@ -175,7 +175,7 @@ ${task.archivedAt ? `- **Archived:** ${new Date(task.archivedAt).toLocaleString(
   zero_update_task: {
     description: 'Update an existing task in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The task ID to update'),
+      id: z.string().uuid().describe('The task ID to update'),
       name: z.string().optional().describe('Task name'),
       description: z.union([z.string(), z.record(z.unknown())]).optional().describe('Task description'),
       done: z.boolean().optional().describe('Whether the task is complete'),
@@ -206,7 +206,7 @@ ${task.archivedAt ? `- **Archived:** ${new Date(task.archivedAt).toLocaleString(
 
 **Name:** ${task.name}
 **ID:** ${task.id}
-**Updated:** ${new Date(task.updatedAt).toLocaleString()}`,
+**Updated:** ${formatDate(task.updatedAt)}`,
           }],
         };
       } catch (error) {
@@ -224,14 +224,15 @@ ${task.archivedAt ? `- **Archived:** ${new Date(task.archivedAt).toLocaleString(
   zero_delete_task: {
     description: 'Delete or archive a task in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The task ID to delete'),
+      id: z.string().uuid().describe('The task ID to delete'),
       archive: z.boolean().optional().default(true).describe('If true, soft delete (archive). If false, permanently delete.'),
     }),
     handler: async (args: { id: string; archive?: boolean }) => {
       try {
+        const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
-        const params: Record<string, string> = {};
+        const params: Record<string, string> = { workspaceId };
         if (args.archive !== false) {
           params.archive = 'true';
         }

@@ -556,7 +556,7 @@ describe('zero_list_companies — API error', () => {
     const text = result.content[0].text;
 
     expect(text).toContain('Authentication failed');
-    expect(text).toContain('ZERO_API_KEY');
+    expect(text).toContain('API credentials');
     expect(result).toHaveProperty('isError', true);
   });
 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { Company, ApiListResponse } from '../types.js';
 import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
 
@@ -8,8 +8,8 @@ export const companyTools = {
     description: 'List companies in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"name": {"$contains": "Acme"}}, {"location.city": "San Francisco"}, {"location.country": "United States"}). Use "include" to fetch related data inline (e.g., ["tasks", "contacts", "deals"]).',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"name": {"$contains": "Acme"}}, {"location.city": "San Francisco"})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"createdAt": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
       include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
@@ -87,7 +87,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_company: {
     description: 'Get a single company by ID with full details. Use "include" to fetch related data inline (e.g., ["tasks", "contacts", "deals"]).',
     inputSchema: z.object({
-      id: z.string().describe('The company ID'),
+      id: z.string().uuid().describe('The company ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
       include: z.array(z.string()).optional().describe('Related entities to include inline: contacts, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
@@ -126,9 +126,9 @@ ${company.country || company.location?.country || ''}
 ${company.description || 'No description'}
 
 ### Timestamps
-- **Created:** ${new Date(company.createdAt).toLocaleString()}
-- **Updated:** ${new Date(company.updatedAt).toLocaleString()}
-${company.archivedAt ? `- **Archived:** ${new Date(company.archivedAt).toLocaleString()}` : ''}`;
+- **Created:** ${formatDate(company.createdAt)}
+- **Updated:** ${formatDate(company.updatedAt)}
+${company.archivedAt ? `- **Archived:** ${formatDate(company.archivedAt)}` : ''}`;
 
         if (args.include && args.include.length > 0) {
           markdown += formatIncludedRelations('company', company as unknown as Record<string, unknown>, args.include);
@@ -188,7 +188,7 @@ ${company.archivedAt ? `- **Archived:** ${new Date(company.archivedAt).toLocaleS
 
 **Name:** ${company.name}
 **ID:** ${company.id}
-**Created:** ${new Date(company.createdAt).toLocaleString()}`,
+**Created:** ${formatDate(company.createdAt)}`,
           }],
         };
       } catch (error) {
@@ -206,7 +206,7 @@ ${company.archivedAt ? `- **Archived:** ${new Date(company.archivedAt).toLocaleS
   zero_update_company: {
     description: 'Update an existing company in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The company ID to update'),
+      id: z.string().uuid().describe('The company ID to update'),
       name: z.string().optional().describe('Company name'),
       domain: z.string().optional().describe('Company domain/website'),
       industry: z.string().optional().describe('Industry'),
@@ -260,14 +260,15 @@ ${company.archivedAt ? `- **Archived:** ${new Date(company.archivedAt).toLocaleS
   zero_delete_company: {
     description: 'Delete or archive a company in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The company ID to delete'),
+      id: z.string().uuid().describe('The company ID to delete'),
       archive: z.boolean().optional().default(true).describe('If true, soft delete (archive). If false, permanently delete.'),
     }),
     handler: async (args: { id: string; archive?: boolean }) => {
       try {
+        const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
-        const params: Record<string, string> = {};
+        const params: Record<string, string> = { workspaceId };
         if (args.archive !== false) {
           params.archive = 'true';
         }

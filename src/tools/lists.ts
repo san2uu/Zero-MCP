@@ -7,8 +7,8 @@ export const listTools = {
     description: 'List saved lists in Zero CRM with optional filtering and pagination. Filter examples: {"entity": "company"}, {"entity": "deal"}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"entity": "company"})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"createdAt": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
@@ -72,7 +72,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_list: {
     description: 'Get a single list by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The list ID'),
+      id: z.string().uuid().describe('The list ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { id: string; fields?: string }) => {

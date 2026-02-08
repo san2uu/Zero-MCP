@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { Contact, ApiListResponse } from '../types.js';
 import { buildIncludeFields, formatIncludedRelations } from '../services/relations.js';
 
@@ -8,8 +8,8 @@ export const contactTools = {
     description: 'List contacts in Zero CRM with optional filtering and pagination. Use the "where" parameter for filtering (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"}). Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]). Tip: To find contacts with recent meetings, use zero_list_calendar_events with a date filter, fetchAll: true, and include: ["contacts"] — a unique contacts summary is appended automatically.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"lastName": "asc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include (use company.name for related data)'),
       includeCompany: z.boolean().optional().default(true).describe('Include company details (legacy, prefer "include" param)'),
@@ -94,7 +94,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_contact: {
     description: 'Get a single contact by ID with full details. Use "include" to fetch related data inline (e.g., ["company", "deals", "tasks"]).',
     inputSchema: z.object({
-      id: z.string().describe('The contact ID'),
+      id: z.string().uuid().describe('The contact ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
       include: z.array(z.string()).optional().describe('Related entities to include inline: company, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
     }),
@@ -131,9 +131,9 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 ${contact.company ? `**${contact.company.name}** (${contact.company.id})` : 'No company associated'}
 
 ### Timestamps
-- **Created:** ${new Date(contact.createdAt).toLocaleString()}
-- **Updated:** ${new Date(contact.updatedAt).toLocaleString()}
-${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleString()}` : ''}`;
+- **Created:** ${formatDate(contact.createdAt)}
+- **Updated:** ${formatDate(contact.updatedAt)}
+${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}`;
 
         if (args.include && args.include.length > 0) {
           markdown += formatIncludedRelations('contact', contact as unknown as Record<string, unknown>, args.include);
@@ -188,7 +188,7 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
 **Name:** ${contact.firstName} ${contact.lastName}
 **ID:** ${contact.id}
 **Email:** ${contact.email || 'N/A'}
-**Created:** ${new Date(contact.createdAt).toLocaleString()}`,
+**Created:** ${formatDate(contact.createdAt)}`,
           }],
         };
       } catch (error) {
@@ -206,7 +206,7 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
   zero_update_contact: {
     description: 'Update an existing contact in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The contact ID to update'),
+      id: z.string().uuid().describe('The contact ID to update'),
       firstName: z.string().optional().describe('First name'),
       lastName: z.string().optional().describe('Last name'),
       email: z.string().optional().describe('Email address'),
@@ -236,7 +236,7 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
 
 **Name:** ${contact.firstName} ${contact.lastName}
 **ID:** ${contact.id}
-**Updated:** ${new Date(contact.updatedAt).toLocaleString()}`,
+**Updated:** ${formatDate(contact.updatedAt)}`,
           }],
         };
       } catch (error) {
@@ -252,9 +252,9 @@ ${contact.archivedAt ? `- **Archived:** ${new Date(contact.archivedAt).toLocaleS
   },
 
   zero_resolve_contacts: {
-    description: 'Resolve multiple contacts by their IDs in a single call. Useful for bulk-resolving contact IDs from calendar events, email threads, etc. Returns contact details for all found IDs. Some IDs may not resolve (e.g., internal workspace members). Note: Some contact IDs from calendar events may resolve to email-only records (no name) if the attendee hasn\'t been fully enriched in the CRM.',
+    description: 'Resolve multiple contacts by their IDs in a single call. Useful for bulk-resolving contact IDs from calendar events, email threads, etc. Returns contact details for all found IDs. Some IDs may not resolve (e.g., internal workspace members). Note: Some contact IDs from calendar events may resolve to email-only records (no name) if the attendee hasn\'t been fully enriched in the CRM. Maximum 500 IDs per request.',
     inputSchema: z.object({
-      ids: z.array(z.string()).describe('Array of contact IDs to resolve'),
+      ids: z.array(z.string().uuid()).min(1).max(500).describe('Array of contact IDs to resolve (max 500)'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { ids: string[]; fields?: string }) => {
@@ -328,14 +328,15 @@ ${unresolvedIds.length > 0 ? `\n### Unresolved IDs (${unresolvedIds.length})\nTh
   zero_delete_contact: {
     description: 'Delete or archive a contact in Zero CRM.',
     inputSchema: z.object({
-      id: z.string().describe('The contact ID to delete'),
+      id: z.string().uuid().describe('The contact ID to delete'),
       archive: z.boolean().optional().default(true).describe('If true, soft delete (archive). If false, permanently delete.'),
     }),
     handler: async (args: { id: string; archive?: boolean }) => {
       try {
+        const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
 
-        const params: Record<string, string> = {};
+        const params: Record<string, string> = { workspaceId };
         if (args.archive !== false) {
           params.archive = 'true';
         }

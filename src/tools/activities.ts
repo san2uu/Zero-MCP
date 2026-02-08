@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError } from '../services/api.js';
+import { createApiClient, ensureWorkspaceId, buildQueryParams, formatApiError, formatDate } from '../services/api.js';
 import { Activity, ApiListResponse } from '../types.js';
 
 export const activityTools = {
@@ -7,8 +7,8 @@ export const activityTools = {
     description: 'List activities (LinkedIn messages, custom activities, etc.) in Zero CRM. Each activity has companyIds, contactIds fields for entity association. Filter examples: {"type": "call"}, {"time": {"$gte": "2026-02-03"}}.',
     inputSchema: z.object({
       where: z.record(z.unknown()).optional().describe('Filter conditions (e.g., {"type": "call"}, {"time": {"$gte": "2026-02-03"}})'),
-      limit: z.number().optional().default(20).describe('Max records to return (default: 20)'),
-      offset: z.number().optional().default(0).describe('Pagination offset'),
+      limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
+      offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
       orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"time": "desc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
@@ -46,7 +46,7 @@ export const activityTools = {
 
 ${activities.map((a, i) => `### ${i + 1}. [${a.type || 'unknown'}] ${a.name || 'N/A'}
 - **ID:** ${a.id}
-- **Time:** ${a.time ? new Date(a.time).toLocaleString() : 'N/A'}
+- **Time:** ${formatDate(a.time)}
 ${a.companyIds?.length ? `- **Company IDs:** ${a.companyIds.join(', ')}` : ''}
 ${a.contactIds?.length ? `- **Contact IDs:** ${a.contactIds.join(', ')}` : ''}
 `).join('\n')}
@@ -73,7 +73,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
   zero_get_activity: {
     description: 'Get a single activity by ID with full details.',
     inputSchema: z.object({
-      id: z.string().describe('The activity ID'),
+      id: z.string().uuid().describe('The activity ID'),
       fields: z.string().optional().describe('Comma-separated fields to include'),
     }),
     handler: async (args: { id: string; fields?: string }) => {
@@ -92,7 +92,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 **ID:** ${activity.id}
 **Type:** ${activity.type || 'N/A'}
 **Name:** ${activity.name || 'N/A'}
-**Time:** ${activity.time ? new Date(activity.time).toLocaleString() : 'N/A'}
+**Time:** ${formatDate(activity.time)}
 
 ### Associations
 ${activity.companyIds?.length ? `- **Company IDs:** ${activity.companyIds.join(', ')}` : '- **Company:** None'}
