@@ -10,7 +10,7 @@ export const contactTools = {
       where: z.record(z.unknown()).optional().describe('Filter conditions using $-prefixed operators (e.g., {"email": {"$contains": "@acme.com"}}, {"companyId": "uuid"})'),
       limit: z.number().int().min(1).max(1000).optional().default(20).describe('Max records to return (default: 20, max: 1000)'),
       offset: z.number().int().min(0).optional().default(0).describe('Pagination offset (min: 0)'),
-      orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"lastName": "asc"})'),
+      orderBy: z.record(z.enum(['asc', 'desc'])).optional().describe('Sort order (e.g., {"name": "asc"})'),
       fields: z.string().optional().describe('Comma-separated fields to include (use company.name for related data)'),
       includeCompany: z.boolean().optional().default(true).describe('Include company details (legacy, prefer "include" param)'),
       include: z.array(z.string()).optional().describe('Related entities to include inline: company, deals, tasks, notes, emailThreads, calendarEvents, activities, comments'),
@@ -24,11 +24,11 @@ export const contactTools = {
         if (args.include && args.include.length > 0) {
           // When using include, build fields from the include list
           if (!fields) {
-            fields = 'id,firstName,lastName,email,phone,title,companyId,createdAt,updatedAt';
+            fields = 'id,name,email,phone,title,companyId,createdAt,updatedAt';
           }
           fields = buildIncludeFields('contact', args.include, fields);
         } else if (args.includeCompany !== false && !fields) {
-          fields = 'id,firstName,lastName,email,phone,title,companyId,company.id,company.name,createdAt,updatedAt';
+          fields = 'id,name,email,phone,title,companyId,company.id,company.name,createdAt,updatedAt';
         }
 
         const params = buildQueryParams({
@@ -59,7 +59,7 @@ export const contactTools = {
         const markdown = `## Contacts (${contacts.length}${total ? ` of ${total}` : ''})
 
 ${contacts.map((c, i) => {
-  let entry = `### ${i + 1}. ${c.firstName} ${c.lastName}
+  let entry = `### ${i + 1}. ${c.name}
 - **ID:** ${c.id}
 - **Email:** ${c.email || 'N/A'}
 - **Phone:** ${c.phone || 'N/A'}
@@ -106,11 +106,11 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         let fields = args.fields;
         if (args.include && args.include.length > 0) {
           if (!fields) {
-            fields = 'id,firstName,lastName,email,phone,title,linkedin,companyId,createdAt,updatedAt,archivedAt';
+            fields = 'id,name,email,phone,title,linkedin,companyId,createdAt,updatedAt,archived';
           }
           fields = buildIncludeFields('contact', args.include, fields);
         } else if (!fields) {
-          fields = 'id,firstName,lastName,email,phone,title,linkedin,companyId,company.id,company.name,createdAt,updatedAt,archivedAt';
+          fields = 'id,name,email,phone,title,linkedin,companyId,company.id,company.name,createdAt,updatedAt,archived';
         }
 
         const params: Record<string, string> = { workspaceId };
@@ -119,7 +119,7 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         const response = await client.get(`/api/contacts/${args.id}`, { params });
         const contact: Contact = (response.data as any).data || response.data;
 
-        let markdown = `## ${contact.firstName} ${contact.lastName}
+        let markdown = `## ${contact.name}
 
 **ID:** ${contact.id}
 **Email:** ${contact.email || 'N/A'}
@@ -133,7 +133,7 @@ ${contact.company ? `**${contact.company.name}** (${contact.company.id})` : 'No 
 ### Timestamps
 - **Created:** ${formatDate(contact.createdAt)}
 - **Updated:** ${formatDate(contact.updatedAt)}
-${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}`;
+${contact.archived ? '- **Archived:** yes' : ''}`;
 
         if (args.include && args.include.length > 0) {
           markdown += formatIncludedRelations('contact', contact as unknown as Record<string, unknown>, args.include);
@@ -158,17 +158,33 @@ ${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}
   },
 
   zero_create_contact: {
-    description: 'Create a new contact in Zero CRM. Optionally associate with a company by ID.',
+    description: 'Create a new contact in Zero CRM. Optionally associate with a company by ID. Use "custom" for custom properties (use zero_list_columns to find field IDs first).',
     inputSchema: z.object({
-      firstName: z.string().describe('First name (required)'),
-      lastName: z.string().describe('Last name (required)'),
+      name: z.string().describe('Contact name (required)'),
       email: z.string().optional().describe('Email address'),
       phone: z.string().optional().describe('Phone number'),
       title: z.string().optional().describe('Job title'),
       linkedin: z.string().optional().describe('LinkedIn profile URL'),
+      x: z.string().optional().describe('X (Twitter) handle'),
+      facebook: z.string().optional().describe('Facebook profile URL'),
+      github: z.string().optional().describe('GitHub username'),
+      avatar: z.string().optional().describe('Avatar URL'),
+      location: z.object({
+        address: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        country: z.string().optional(),
+        postalCode: z.string().optional(),
+      }).optional().describe('Contact location'),
+      type: z.string().optional().describe('Contact type'),
       companyId: z.string().optional().describe('Company ID to associate with'),
+      custom: z.record(z.unknown()).optional().describe('Custom properties (use column IDs as keys)'),
+      listIds: z.array(z.string()).optional().describe('List IDs to add the contact to'),
+      ownerIds: z.array(z.string()).optional().describe('Owner user IDs'),
+      externalId: z.string().optional().describe('External system ID'),
+      source: z.string().optional().describe('Source of the contact record'),
     }),
-    handler: async (args: { firstName: string; lastName: string; email?: string; phone?: string; title?: string; linkedin?: string; companyId?: string }) => {
+    handler: async (args: { name: string; email?: string; phone?: string; title?: string; linkedin?: string; companyId?: string; [key: string]: unknown }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
@@ -185,7 +201,7 @@ ${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}
             type: 'text' as const,
             text: `## Contact Created Successfully
 
-**Name:** ${contact.firstName} ${contact.lastName}
+**Name:** ${contact.name}
 **ID:** ${contact.id}
 **Email:** ${contact.email || 'N/A'}
 **Created:** ${formatDate(contact.createdAt)}`,
@@ -204,18 +220,34 @@ ${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}
   },
 
   zero_update_contact: {
-    description: 'Update an existing contact in Zero CRM.',
+    description: 'Update an existing contact in Zero CRM. Use "custom" for custom properties (use zero_list_columns to find field IDs first).',
     inputSchema: z.object({
       id: z.string().uuid().describe('The contact ID to update'),
-      firstName: z.string().optional().describe('First name'),
-      lastName: z.string().optional().describe('Last name'),
+      name: z.string().optional().describe('Contact name'),
       email: z.string().optional().describe('Email address'),
       phone: z.string().optional().describe('Phone number'),
       title: z.string().optional().describe('Job title'),
       linkedin: z.string().optional().describe('LinkedIn profile URL'),
+      x: z.string().optional().describe('X (Twitter) handle'),
+      facebook: z.string().optional().describe('Facebook profile URL'),
+      github: z.string().optional().describe('GitHub username'),
+      avatar: z.string().optional().describe('Avatar URL'),
+      location: z.object({
+        address: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        country: z.string().optional(),
+        postalCode: z.string().optional(),
+      }).optional().describe('Contact location'),
+      type: z.string().optional().describe('Contact type'),
       companyId: z.string().optional().describe('Company ID to associate with'),
+      custom: z.record(z.unknown()).optional().describe('Custom properties (use column IDs as keys)'),
+      listIds: z.array(z.string()).optional().describe('List IDs'),
+      ownerIds: z.array(z.string()).optional().describe('Owner user IDs'),
+      externalId: z.string().optional().describe('External system ID'),
+      source: z.string().optional().describe('Source of the contact record'),
     }),
-    handler: async (args: { id: string; firstName?: string; lastName?: string; email?: string; phone?: string; title?: string; linkedin?: string; companyId?: string }) => {
+    handler: async (args: { id: string; name?: string; email?: string; phone?: string; title?: string; linkedin?: string; companyId?: string; [key: string]: unknown }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
@@ -234,7 +266,7 @@ ${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}
             type: 'text' as const,
             text: `## Contact Updated Successfully
 
-**Name:** ${contact.firstName} ${contact.lastName}
+**Name:** ${contact.name}
 **ID:** ${contact.id}
 **Updated:** ${formatDate(contact.updatedAt)}`,
           }],
@@ -272,7 +304,7 @@ ${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}
           };
         }
 
-        const fields = args.fields || 'id,firstName,lastName,email,phone,title,companyId,company.id,company.name,createdAt';
+        const fields = args.fields || 'id,name,email,phone,title,companyId,company.id,company.name,createdAt';
 
         const params = buildQueryParams({
           workspaceId,
@@ -298,7 +330,7 @@ ${contact.archivedAt ? `- **Archived:** ${formatDate(contact.archivedAt)}` : ''}
 
         const markdown = `## Resolved Contacts (${contacts.length} of ${uniqueIds.length} IDs)
 
-${contacts.map((c: Contact, i: number) => `### ${i + 1}. ${c.firstName} ${c.lastName}
+${contacts.map((c: Contact, i: number) => `### ${i + 1}. ${c.name}
 - **ID:** ${c.id}
 - **Email:** ${c.email || 'N/A'}
 - **Phone:** ${c.phone || 'N/A'}

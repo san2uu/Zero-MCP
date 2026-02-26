@@ -188,9 +188,8 @@ export async function fetchCompaniesByIds(companyIds: string[]): Promise<Map<str
     const response = await client.get('/api/companies', { params });
     const companies = response.data.data || [];
     for (const c of companies) {
-      // Handle both flat fields (city, country) and nested (location.city, location.country)
-      const city = c.city || c.location?.city;
-      const country = c.country || c.location?.country;
+      const city = c.location?.city;
+      const country = c.location?.country;
       map.set(c.id, { name: c.name, city, country });
     }
   } catch {

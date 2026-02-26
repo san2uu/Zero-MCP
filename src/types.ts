@@ -1,10 +1,18 @@
 // Zero API Types
-// API Version: Beta (as of 2024-01)
-// Last updated: 2024-01-15
+// API Version: 1.3.0
+// Last updated: 2026-02-26
 
 export interface Workspace {
   id: string;
   name: string;
+  key?: string;
+  domain?: string;
+  avatar?: string;
+  color?: string;
+  settings?: Record<string, unknown>;
+  type?: string;
+  trialEndsAt?: string;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -15,6 +23,10 @@ export interface CompanyLocation {
   country?: string;
   address?: string;
   postalCode?: string;
+  continent?: string;
+  countryCode?: string;
+  stateCode?: string;
+  coordinates?: { lat: number; lng: number };
 }
 
 export interface Company {
@@ -22,22 +34,20 @@ export interface Company {
   workspaceId: string;
   name: string;
   domain?: string;
-  industry?: string;
-  size?: string;
   description?: string;
-  website?: string;
   linkedin?: string;
-  // Location may be returned as flat fields or nested under `location`
-  address?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  postalCode?: string;
+  logo?: string;
   location?: CompanyLocation;
-  phone?: string;
+  listIds?: string[];
+  ownerIds?: string[];
+  parentCompanyId?: string;
+  custom?: Record<string, unknown>;
+  externalId?: string;
+  source?: string;
+  createdById?: string;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
-  archivedAt?: string;
 }
 
 export interface Contact {
@@ -45,15 +55,26 @@ export interface Contact {
   workspaceId: string;
   companyId?: string;
   company?: Company;
-  firstName: string;
-  lastName: string;
+  name: string;
   email?: string;
   phone?: string;
   title?: string;
   linkedin?: string;
+  x?: string;
+  facebook?: string;
+  github?: string;
+  avatar?: string;
+  location?: CompanyLocation;
+  type?: string;
+  custom?: Record<string, unknown>;
+  listIds?: string[];
+  ownerIds?: string[];
+  externalId?: string;
+  source?: string;
+  createdById?: string;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
-  archivedAt?: string;
 }
 
 export interface PipelineStage {
@@ -74,16 +95,20 @@ export interface Deal {
   name: string;
   value?: number;
   stage?: string;
-  confidence?: string;
+  pipelineId?: string;
+  confidence?: number;
   closeDate?: string;
   startDate?: string;
   endDate?: string;
   ownerIds?: string[];
-  archived?: boolean;
+  listIds?: string[];
   custom?: Record<string, unknown>;
+  externalId?: string;
+  source?: string;
+  createdById?: string;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
-  archivedAt?: string;
 }
 
 export interface ApiListResponse<T> {
@@ -120,13 +145,18 @@ export interface Task {
 export interface Note {
   id: string;
   workspaceId: string;
+  name?: string;
+  emoji?: string;
   content?: string | Record<string, unknown>;
   companyId?: string;
   contactId?: string;
   dealId?: string;
+  externalId?: string;
+  source?: string;
+  createdById?: string;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
-  archivedAt?: string;
 }
 
 export interface Activity {
@@ -220,6 +250,22 @@ export interface List {
   color?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Column {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string;
+  key?: string;
+  type?: string;
+  entity?: string;
+  options?: Record<string, unknown>[];
+  ai?: boolean;
+  archived?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdById?: string;
 }
 
 export interface ListParams {

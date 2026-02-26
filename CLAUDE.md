@@ -35,6 +35,7 @@ src/
     comments.ts         # Comment CRUD
     issues.ts           # Issue read-only (list, get) — Slack messages via Pylon/Plain
     lists.ts            # List read-only (list, get)
+    columns.ts          # Column (custom property definitions) read-only (list)
     active-deals.ts     # Composite: find deals with recent activity across all sources
   __tests__/
     tools.test.ts       # Integration tests with mocked HTTP
@@ -63,6 +64,16 @@ src/
 **Calendar event includes:** `zero_list_calendar_events` and `zero_get_calendar_event` support `include: ["contacts", "companies", "tasks"]` to resolve related entities inline instead of just returning ID arrays.
 
 **Composite tools:** `zero_find_active_deals` queries activity sources in parallel with a date filter. Only emailThreads and calendarEvents contribute direct deal associations (via `dealIds` arrays). Activities and issues are queried but cannot be correlated to deals directly. Handles source failures gracefully.
+
+**Columns:** `zero_list_columns` returns custom property definitions (id, name, type, entity, options). Use to discover custom field IDs before filtering/updating records with `custom` properties or `where` conditions like `{"custom.fieldId": {"$eq": "value"}}`.
+
+**Contact name field:** Contacts use a single `name` field (not `firstName`/`lastName`).
+
+**Company location:** Companies use a nested `location` object (`city`, `state`, `country`, `address`, `postalCode`, `continent`, `countryCode`, `stateCode`, `coordinates`). No flat address fields.
+
+**Deal confidence:** The `confidence` field on deals is a number between 0 and 1 (not a string).
+
+**Custom properties:** Companies, contacts, and deals support a `custom: Record<string, unknown>` field for custom properties. Use `zero_list_columns` to discover field IDs. Filter with dot notation: `{"custom.fieldId": {"$eq": "value"}}`.
 
 **Issues:** Slack messages synced via Pylon/Plain are exposed as "issues" (`/api/issues`). The Issue entity has title, description, status, priority, source, and entity association fields.
 

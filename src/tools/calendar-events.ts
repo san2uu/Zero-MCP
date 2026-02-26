@@ -57,7 +57,7 @@ async function resolveCalendarEventIncludes(
               workspaceId,
               where: { id: { $in: allContactIds } },
               limit: allContactIds.length,
-              fields: 'id,firstName,lastName,email,title',
+              fields: 'id,name,email,title',
             });
             const response = await client.get('/api/contacts', { params });
             const contacts = response.data.data || [];
@@ -127,7 +127,7 @@ function buildUniqueContactsSummary(events: CalendarEvent[]): string {
   const named: Record<string, unknown>[] = [];
   const emailOnly: Record<string, unknown>[] = [];
   for (const c of contactMap.values()) {
-    if (c.firstName || c.lastName) {
+    if (c.name) {
       named.push(c);
     } else {
       emailOnly.push(c);
@@ -136,7 +136,7 @@ function buildUniqueContactsSummary(events: CalendarEvent[]): string {
 
   let summary = `\n### Unique Contacts Met (${contactMap.size})\n`;
   for (const c of named) {
-    summary += `- ${c.firstName || ''} ${c.lastName || ''} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}\n`;
+    summary += `- ${c.name} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}\n`;
   }
   for (const c of emailOnly) {
     summary += `- ${c.email || 'N/A'} (unresolved attendee)\n`;

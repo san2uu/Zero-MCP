@@ -6,10 +6,10 @@ type EntityType = 'company' | 'contact' | 'deal' | 'calendarEvent';
 
 const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
   company: {
-    contacts: 'contacts.id,contacts.firstName,contacts.lastName,contacts.email,contacts.title',
+    contacts: 'contacts.id,contacts.name,contacts.email,contacts.title',
     deals: 'deals.id,deals.name,deals.value,deals.stage,deals.closeDate',
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
-    notes: 'notes.id,notes.content,notes.createdAt',
+    notes: 'notes.id,notes.name,notes.content,notes.createdAt',
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
     calendarEvents: 'calendarEvents.id,calendarEvents.name,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.name,activities.time',
@@ -20,7 +20,7 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     company: 'company.id,company.name,company.domain',
     deals: 'deals.id,deals.name,deals.value,deals.stage,deals.closeDate',
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
-    notes: 'notes.id,notes.content,notes.createdAt',
+    notes: 'notes.id,notes.name,notes.content,notes.createdAt',
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
     calendarEvents: 'calendarEvents.id,calendarEvents.name,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.name,activities.time',
@@ -29,9 +29,9 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
   },
   deal: {
     company: 'company.id,company.name,company.domain',
-    contacts: 'contacts.id,contacts.firstName,contacts.lastName,contacts.email,contacts.title',
+    contacts: 'contacts.id,contacts.name,contacts.email,contacts.title',
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
-    notes: 'notes.id,notes.content,notes.createdAt',
+    notes: 'notes.id,notes.name,notes.content,notes.createdAt',
     emailThreads: 'emailThreads.id,emailThreads.subject,emailThreads.snippet,emailThreads.lastEmailTime',
     calendarEvents: 'calendarEvents.id,calendarEvents.name,calendarEvents.startTime,calendarEvents.endTime',
     activities: 'activities.id,activities.type,activities.name,activities.time',
@@ -39,7 +39,7 @@ const RELATION_FIELDS: Record<EntityType, Record<string, string>> = {
     comments: 'comments.id,comments.content,comments.createdAt',
   },
   calendarEvent: {
-    contacts: 'contacts.id,contacts.firstName,contacts.lastName,contacts.email,contacts.title',
+    contacts: 'contacts.id,contacts.name,contacts.email,contacts.title',
     companies: 'companies.id,companies.name,companies.domain',
     tasks: 'tasks.id,tasks.name,tasks.done,tasks.deadline',
   },
@@ -100,9 +100,8 @@ export function formatIncludedRelations(entityType: EntityType, record: Record<s
     switch (name) {
       case 'contacts':
         itemLines = items.map((c) => {
-          const hasName = c.firstName || c.lastName;
-          if (hasName) {
-            return `- ${c.firstName || ''} ${c.lastName || ''} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}`;
+          if (c.name) {
+            return `- ${c.name} — ${c.email || 'N/A'}${c.title ? ` (${c.title})` : ''}`;
           }
           return `- ${c.email || 'N/A'} (unresolved attendee)`;
         });

@@ -84,11 +84,9 @@ export const dealTools = {
           return location ? `${name} (${location})` : name;
         };
 
-        const formatConfidence = (confidence: string | undefined) => {
-          if (!confidence) return 'N/A';
-          const parsed = parseFloat(confidence);
-          if (isNaN(parsed)) return 'N/A';
-          return `${Math.round(parsed * 100)}%`;
+        const formatConfidence = (confidence: number | undefined) => {
+          if (confidence == null) return 'N/A';
+          return `${Math.round(confidence * 100)}%`;
         };
 
         const markdown = `## Deals (${deals.length}${total ? ` of ${total}` : ''})
@@ -145,11 +143,11 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         let fields = args.fields;
         if (hasInclude) {
           if (!fields) {
-            fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,contactIds,ownerIds,archived,createdAt,updatedAt,archivedAt';
+            fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,contactIds,ownerIds,archived,createdAt,updatedAt';
           }
           fields = buildIncludeFields('deal', args.include!, fields);
         } else if (!fields) {
-          fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,company.id,company.name,contactIds,ownerIds,archived,createdAt,updatedAt,archivedAt';
+          fields = 'id,name,value,stage,confidence,closeDate,startDate,endDate,companyId,company.id,company.name,contactIds,ownerIds,archived,createdAt,updatedAt';
         }
 
         const params: Record<string, string> = { workspaceId };
@@ -175,11 +173,9 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
         const companyName = enrichedCompany?.name || deal.company?.name;
         const companyLocation = [enrichedCompany?.city, enrichedCompany?.country].filter(Boolean).join(', ');
 
-        const formatConfidence = (confidence: string | undefined) => {
-          if (!confidence) return 'N/A';
-          const parsed = parseFloat(confidence);
-          if (isNaN(parsed)) return 'N/A';
-          return `${Math.round(parsed * 100)}%`;
+        const formatConfidence = (confidence: number | undefined) => {
+          if (confidence == null) return 'N/A';
+          return `${Math.round(confidence * 100)}%`;
         };
 
         let markdown = `## ${deal.name}
@@ -196,7 +192,7 @@ ${companyName ? `**${companyName}** (${deal.company?.id || deal.companyId})${com
 ### Timestamps
 - **Created:** ${formatDate(deal.createdAt)}
 - **Updated:** ${formatDate(deal.updatedAt)}
-${deal.archivedAt ? `- **Archived:** ${formatDate(deal.archivedAt)}` : ''}`;
+${deal.archived ? '- **Archived:** yes' : ''}`;
 
         if (hasInclude) {
           markdown += formatIncludedRelations('deal', deal as unknown as Record<string, unknown>, args.include!);
@@ -221,17 +217,23 @@ ${deal.archivedAt ? `- **Archived:** ${formatDate(deal.archivedAt)}` : ''}`;
   },
 
   zero_create_deal: {
-    description: 'Create a new deal in Zero CRM.',
+    description: 'Create a new deal in Zero CRM. Use "custom" for custom properties (use zero_list_columns to find field IDs first).',
     inputSchema: z.object({
       name: z.string().describe('Deal name (required)'),
       value: z.number().optional().describe('Deal value'),
       stage: z.string().optional().describe('Pipeline stage ID. Use zero_list_pipeline_stages to look up valid stage IDs.'),
-      confidence: z.string().optional().describe('Confidence as decimal (e.g., "0.60" for 60%)'),
+      pipelineId: z.string().optional().describe('Pipeline ID (if multiple pipelines exist)'),
+      confidence: z.number().min(0).max(1).optional().describe('Confidence as decimal between 0 and 1 (e.g., 0.60 for 60%)'),
       closeDate: z.string().optional().describe('Close date (ISO format)'),
       companyId: z.string().optional().describe('Company ID to associate with'),
       contactIds: z.array(z.string()).optional().describe('Contact IDs to associate with'),
+      listIds: z.array(z.string()).optional().describe('List IDs to add the deal to'),
+      ownerIds: z.array(z.string()).optional().describe('Owner user IDs'),
+      custom: z.record(z.unknown()).optional().describe('Custom properties (use column IDs as keys)'),
+      externalId: z.string().optional().describe('External system ID'),
+      source: z.string().optional().describe('Source of the deal record'),
     }),
-    handler: async (args: { name: string; value?: number; stage?: string; confidence?: string; closeDate?: string; companyId?: string; contactIds?: string[] }) => {
+    handler: async (args: { name: string; value?: number; stage?: string; pipelineId?: string; confidence?: number; closeDate?: string; companyId?: string; contactIds?: string[]; [key: string]: unknown }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();
@@ -275,18 +277,24 @@ ${deal.archivedAt ? `- **Archived:** ${formatDate(deal.archivedAt)}` : ''}`;
   },
 
   zero_update_deal: {
-    description: 'Update an existing deal in Zero CRM.',
+    description: 'Update an existing deal in Zero CRM. Use "custom" for custom properties (use zero_list_columns to find field IDs first).',
     inputSchema: z.object({
       id: z.string().uuid().describe('The deal ID to update'),
       name: z.string().optional().describe('Deal name'),
       value: z.number().optional().describe('Deal value'),
       stage: z.string().optional().describe('Pipeline stage ID. Use zero_list_pipeline_stages to look up valid stage IDs.'),
-      confidence: z.string().optional().describe('Confidence as decimal (e.g., "0.60" for 60%)'),
+      pipelineId: z.string().optional().describe('Pipeline ID'),
+      confidence: z.number().min(0).max(1).optional().describe('Confidence as decimal between 0 and 1 (e.g., 0.60 for 60%)'),
       closeDate: z.string().optional().describe('Close date (ISO format)'),
       companyId: z.string().optional().describe('Company ID to associate with'),
       contactIds: z.array(z.string()).optional().describe('Contact IDs to associate with'),
+      listIds: z.array(z.string()).optional().describe('List IDs'),
+      ownerIds: z.array(z.string()).optional().describe('Owner user IDs'),
+      custom: z.record(z.unknown()).optional().describe('Custom properties (use column IDs as keys)'),
+      externalId: z.string().optional().describe('External system ID'),
+      source: z.string().optional().describe('Source of the deal record'),
     }),
-    handler: async (args: { id: string; name?: string; value?: number; stage?: string; confidence?: string; closeDate?: string; companyId?: string; contactIds?: string[] }) => {
+    handler: async (args: { id: string; name?: string; value?: number; stage?: string; confidence?: number; closeDate?: string; companyId?: string; contactIds?: string[]; [key: string]: unknown }) => {
       try {
         const workspaceId = await ensureWorkspaceId();
         const client = createApiClient();

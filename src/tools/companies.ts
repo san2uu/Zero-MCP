@@ -55,9 +55,7 @@ ${companies.map((c, i) => {
   let entry = `### ${i + 1}. ${c.name}
 - **ID:** ${c.id}
 - **Domain:** ${c.domain || 'N/A'}
-- **Industry:** ${c.industry || 'N/A'}
-- **Size:** ${c.size || 'N/A'}
-- **Location:** ${[c.city || c.location?.city, c.state || c.location?.state, c.country || c.location?.country].filter(Boolean).join(', ') || 'N/A'}
+- **Location:** ${[c.location?.city, c.location?.state, c.location?.country].filter(Boolean).join(', ') || 'N/A'}
 `;
   if (args.include && args.include.length > 0) {
     entry += formatIncludedRelations('company', c as unknown as Record<string, unknown>, args.include);
@@ -111,16 +109,13 @@ ${hasMore ? `\n*More results available. Use offset=${offset + limit} to see next
 
 **ID:** ${company.id}
 **Domain:** ${company.domain || 'N/A'}
-**Industry:** ${company.industry || 'N/A'}
-**Size:** ${company.size || 'N/A'}
-**Website:** ${company.website || 'N/A'}
 **LinkedIn:** ${company.linkedin || 'N/A'}
-**Phone:** ${company.phone || 'N/A'}
+**Logo:** ${company.logo || 'N/A'}
 
-### Address
-${company.address || company.location?.address || ''}
-${[company.city || company.location?.city, company.state || company.location?.state, company.postalCode || company.location?.postalCode].filter(Boolean).join(', ')}
-${company.country || company.location?.country || ''}
+### Location
+${company.location?.address || ''}
+${[company.location?.city, company.location?.state, company.location?.postalCode].filter(Boolean).join(', ')}
+${company.location?.country || ''}
 
 ### Description
 ${company.description || 'No description'}
@@ -128,7 +123,7 @@ ${company.description || 'No description'}
 ### Timestamps
 - **Created:** ${formatDate(company.createdAt)}
 - **Updated:** ${formatDate(company.updatedAt)}
-${company.archivedAt ? `- **Archived:** ${formatDate(company.archivedAt)}` : ''}`;
+${company.archived ? '- **Archived:** yes' : ''}`;
 
         if (args.include && args.include.length > 0) {
           markdown += formatIncludedRelations('company', company as unknown as Record<string, unknown>, args.include);
@@ -153,21 +148,26 @@ ${company.archivedAt ? `- **Archived:** ${formatDate(company.archivedAt)}` : ''}
   },
 
   zero_create_company: {
-    description: 'Create a new company in Zero CRM.',
+    description: 'Create a new company in Zero CRM. Use "custom" for custom properties (use zero_list_columns to find field IDs first).',
     inputSchema: z.object({
       name: z.string().describe('Company name (required)'),
-      domain: z.string().optional().describe('Company domain/website'),
-      industry: z.string().optional().describe('Industry'),
-      size: z.string().optional().describe('Company size'),
+      domain: z.string().optional().describe('Company domain (e.g., "acme.com")'),
+      logo: z.string().optional().describe('Logo URL'),
       description: z.string().optional().describe('Company description'),
-      website: z.string().optional().describe('Website URL'),
       linkedin: z.string().optional().describe('LinkedIn profile URL'),
-      address: z.string().optional().describe('Street address'),
-      city: z.string().optional().describe('City'),
-      state: z.string().optional().describe('State/Province'),
-      country: z.string().optional().describe('Country'),
-      postalCode: z.string().optional().describe('Postal/ZIP code'),
-      phone: z.string().optional().describe('Phone number'),
+      location: z.object({
+        address: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        country: z.string().optional(),
+        postalCode: z.string().optional(),
+      }).optional().describe('Company location'),
+      listIds: z.array(z.string()).optional().describe('List IDs to add the company to'),
+      ownerIds: z.array(z.string()).optional().describe('Owner user IDs'),
+      parentCompanyId: z.string().optional().describe('Parent company ID'),
+      custom: z.record(z.unknown()).optional().describe('Custom properties (use column IDs as keys, e.g., {"col_abc123": "value"})'),
+      externalId: z.string().optional().describe('External system ID'),
+      source: z.string().optional().describe('Source of the company record'),
     }),
     handler: async (args: Partial<Company> & { name: string }) => {
       try {
@@ -204,22 +204,27 @@ ${company.archivedAt ? `- **Archived:** ${formatDate(company.archivedAt)}` : ''}
   },
 
   zero_update_company: {
-    description: 'Update an existing company in Zero CRM.',
+    description: 'Update an existing company in Zero CRM. Use "custom" for custom properties (use zero_list_columns to find field IDs first). You can also update custom properties individually via dot notation in the request body (e.g., {"custom.fieldId": "new value"}).',
     inputSchema: z.object({
       id: z.string().uuid().describe('The company ID to update'),
       name: z.string().optional().describe('Company name'),
-      domain: z.string().optional().describe('Company domain/website'),
-      industry: z.string().optional().describe('Industry'),
-      size: z.string().optional().describe('Company size'),
+      domain: z.string().optional().describe('Company domain'),
+      logo: z.string().optional().describe('Logo URL'),
       description: z.string().optional().describe('Company description'),
-      website: z.string().optional().describe('Website URL'),
       linkedin: z.string().optional().describe('LinkedIn profile URL'),
-      address: z.string().optional().describe('Street address'),
-      city: z.string().optional().describe('City'),
-      state: z.string().optional().describe('State/Province'),
-      country: z.string().optional().describe('Country'),
-      postalCode: z.string().optional().describe('Postal/ZIP code'),
-      phone: z.string().optional().describe('Phone number'),
+      location: z.object({
+        address: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        country: z.string().optional(),
+        postalCode: z.string().optional(),
+      }).optional().describe('Company location'),
+      listIds: z.array(z.string()).optional().describe('List IDs'),
+      ownerIds: z.array(z.string()).optional().describe('Owner user IDs'),
+      parentCompanyId: z.string().optional().describe('Parent company ID'),
+      custom: z.record(z.unknown()).optional().describe('Custom properties (use column IDs as keys)'),
+      externalId: z.string().optional().describe('External system ID'),
+      source: z.string().optional().describe('Source of the company record'),
     }),
     handler: async (args: { id: string } & Partial<Company>) => {
       try {

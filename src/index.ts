@@ -16,6 +16,7 @@ import { commentTools } from './tools/comments.js';
 import { issueTools } from './tools/issues.js';
 import { listTools } from './tools/lists.js';
 import { activeDealTools } from './tools/active-deals.js';
+import { columnTools } from './tools/columns.js';
 
 
 const server = new McpServer({
@@ -349,6 +350,14 @@ server.tool(
   listTools.zero_get_list.description,
   listTools.zero_get_list.inputSchema.shape,
   listTools.zero_get_list.handler
+);
+
+// Register column tools
+server.tool(
+  'zero_list_columns',
+  columnTools.zero_list_columns.description,
+  columnTools.zero_list_columns.inputSchema.shape,
+  columnTools.zero_list_columns.handler
 );
 
 // Register composite tools

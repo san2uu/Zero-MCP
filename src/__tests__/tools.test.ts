@@ -42,6 +42,7 @@ import { commentTools } from '../tools/comments.js';
 import { issueTools } from '../tools/issues.js';
 import { listTools } from '../tools/lists.js';
 import { activeDealTools } from '../tools/active-deals.js';
+import { columnTools } from '../tools/columns.js';
 import { setCachedWorkspaceId, setCachedPipelineStages, buildQueryParams } from '../services/api.js';
 import { AxiosError } from 'axios';
 
@@ -89,8 +90,8 @@ describe('zero_list_companies', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'co-1', name: 'Acme Corp', domain: 'acme.com', industry: 'Tech', size: '100', city: 'SF', state: 'CA', country: 'US', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-          { id: 'co-2', name: 'Globex Inc', domain: 'globex.com', industry: 'Finance', size: '500', city: 'NYC', state: 'NY', country: 'US', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'co-1', name: 'Acme Corp', domain: 'acme.com', location: { city: 'SF', state: 'CA', country: 'US' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'co-2', name: 'Globex Inc', domain: 'globex.com', location: { city: 'NYC', state: 'NY', country: 'US' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
         ],
         total: 2,
         limit: 20,
@@ -168,8 +169,8 @@ describe('zero_list_deals — value filter', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'd-1', name: 'Big Deal', value: 75000, stage: 'stage-id-2', confidence: '0.80', closeDate: '2026-06-01T00:00:00Z', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-          { id: 'd-2', name: 'Mega Deal', value: 120000, stage: 'stage-id-3', confidence: '0.95', closeDate: '2026-03-15T00:00:00Z', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-1', name: 'Big Deal', value: 75000, stage: 'stage-id-2', confidence: 0.80, closeDate: '2026-06-01T00:00:00Z', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-2', name: 'Mega Deal', value: 120000, stage: 'stage-id-3', confidence: 0.95, closeDate: '2026-03-15T00:00:00Z', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
         ],
         total: 2,
         limit: 20,
@@ -256,7 +257,7 @@ describe('zero_get_deal', () => {
           name: 'Enterprise Deal',
           value: 250000,
           stage: 'stage-id-3',
-          confidence: '0.90',
+          confidence: 0.90,
           closeDate: '2026-06-01T00:00:00Z',
           company: { id: 'co-1', name: 'Acme Corp' },
           createdAt: '2024-01-01T00:00:00Z',
@@ -287,8 +288,7 @@ describe('zero_create_contact', () => {
     mockPost.mockResolvedValueOnce({
       data: {
         id: 'ct-1',
-        firstName: 'Jane',
-        lastName: 'Doe',
+        name: 'Jane Doe',
         email: 'jane@acme.com',
         title: 'CTO',
         companyId: 'co-1',
@@ -298,8 +298,7 @@ describe('zero_create_contact', () => {
     });
 
     const result = await contactTools.zero_create_contact.handler({
-      firstName: 'Jane',
-      lastName: 'Doe',
+      name: 'Jane Doe',
       email: 'jane@acme.com',
       title: 'CTO',
       companyId: 'co-1',
@@ -314,8 +313,7 @@ describe('zero_create_contact', () => {
 
     // Verify request body
     expect(mockPost).toHaveBeenCalledWith('/api/contacts', expect.objectContaining({
-      firstName: 'Jane',
-      lastName: 'Doe',
+      name: 'Jane Doe',
       email: 'jane@acme.com',
       companyId: 'co-1',
       workspaceId: WORKSPACE_ID,
@@ -330,8 +328,8 @@ describe('cross-reference — deals by company location', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'co-10', name: 'Berlin GmbH', domain: 'berlin.de', city: 'Berlin', country: 'Germany', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-          { id: 'co-11', name: 'Paris SAS', domain: 'paris.fr', city: 'Paris', country: 'France', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'co-10', name: 'Berlin GmbH', domain: 'berlin.de', location: { city: 'Berlin', country: 'Germany' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'co-11', name: 'Paris SAS', domain: 'paris.fr', location: { city: 'Paris', country: 'France' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
         ],
         total: 2,
         limit: 20,
@@ -354,8 +352,8 @@ describe('cross-reference — deals by company location', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'd-10', name: 'Berlin Deal', value: 50000, stage: 'stage-id-1', company: { id: 'co-10', name: 'Berlin GmbH', country: 'Germany', city: 'Berlin' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-          { id: 'd-11', name: 'Paris Deal', value: 30000, stage: 'stage-id-2', company: { id: 'co-11', name: 'Paris SAS', country: 'France', city: 'Paris' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-10', name: 'Berlin Deal', value: 50000, stage: 'stage-id-1', company: { id: 'co-10', name: 'Berlin GmbH' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'd-11', name: 'Paris Deal', value: 30000, stage: 'stage-id-2', company: { id: 'co-11', name: 'Paris SAS' }, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
         ],
         total: 2,
         limit: 20,
@@ -380,7 +378,7 @@ describe('cross-reference — deals by company location', () => {
 // ─── 11. Deal responses include company location ────────────────────────────
 
 describe('zero_list_deals — company location in output', () => {
-  it('shows company city and country from flat fields', async () => {
+  it('shows company city and country from location object', async () => {
     // First call: list deals
     mockGet.mockResolvedValueOnce({
       data: {
@@ -393,11 +391,11 @@ describe('zero_list_deals — company location in output', () => {
         offset: 0,
       },
     });
-    // Second call: enrich companies — flat fields (city, country at top level)
+    // Second call: enrich companies — location object
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'co-20', name: 'Tokyo Ltd', city: 'Tokyo', country: 'Japan' },
+          { id: 'co-20', name: 'Tokyo Ltd', location: { city: 'Tokyo', country: 'Japan' } },
           { id: 'co-21', name: 'Mystery Co' },
         ],
       },
@@ -451,7 +449,7 @@ describe('zero_get_deal — company location in output', () => {
           name: 'London Deal',
           value: 80000,
           stage: 'stage-id-3',
-          confidence: '0.85',
+          confidence: 0.85,
           closeDate: '2026-09-01T00:00:00Z',
           companyId: 'co-30',
           company: { id: 'co-30', name: 'London Corp' },
@@ -464,7 +462,7 @@ describe('zero_get_deal — company location in output', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'co-30', name: 'London Corp', city: 'London', country: 'United Kingdom' },
+          { id: 'co-30', name: 'London Corp', location: { city: 'London', country: 'United Kingdom' } },
         ],
       },
     });
@@ -498,7 +496,7 @@ describe('cross-reference — deals by stage and company location', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'co-10', name: 'Berlin GmbH', city: 'Berlin', country: 'Germany' },
+          { id: 'co-10', name: 'Berlin GmbH', location: { city: 'Berlin', country: 'Germany' } },
         ],
       },
     });
@@ -569,8 +567,8 @@ describe('zero_list_companies — include tasks', () => {
       data: {
         data: [
           {
-            id: 'co-1', name: 'Acme Corp', domain: 'acme.com', industry: 'Tech', size: '100',
-            city: 'SF', state: 'CA', country: 'US',
+            id: 'co-1', name: 'Acme Corp', domain: 'acme.com',
+            location: { city: 'SF', state: 'CA', country: 'US' },
             createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
             tasks: [
               { id: 't-1', name: 'Follow up', done: false, deadline: '2026-03-01T00:00:00Z' },
@@ -613,7 +611,7 @@ describe('zero_list_companies — include contacts and deals', () => {
             id: 'co-1', name: 'Acme Corp', domain: 'acme.com',
             createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
             contacts: [
-              { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
+              { id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com', title: 'CTO' },
             ],
             deals: [
               { id: 'd-1', name: 'Big Deal', value: 50000, stage: 'stage-id-1', closeDate: '2026-06-01T00:00:00Z' },
@@ -675,7 +673,7 @@ describe('zero_list_contacts — include deals', () => {
       data: {
         data: [
           {
-            id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com',
+            id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com',
             createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
             deals: [
               { id: 'd-1', name: 'Acme Deal', value: 25000 },
@@ -714,7 +712,7 @@ describe('zero_list_deals — include tasks and contacts', () => {
               { id: 't-1', name: 'Negotiate terms', done: false },
             ],
             contacts: [
-              { id: 'ct-1', firstName: 'John', lastName: 'Smith', email: 'john@corp.com' },
+              { id: 'ct-1', name: 'John Smith', email: 'john@corp.com' },
             ],
           },
         ],
@@ -1335,8 +1333,8 @@ describe('zero_find_active_deals', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'co-1', name: 'Acme Corp', city: 'SF', country: 'US' },
-          { id: 'co-2', name: 'Globex Inc', city: 'NYC', country: 'US' },
+          { id: 'co-1', name: 'Acme Corp', location: { city: 'SF', country: 'US' } },
+          { id: 'co-2', name: 'Globex Inc', location: { city: 'NYC', country: 'US' } },
         ],
       },
     });
@@ -1437,8 +1435,8 @@ describe('zero_resolve_contacts', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO', company: { id: 'co-1', name: 'Acme Corp' }, createdAt: '2024-01-01T00:00:00Z' },
-          { id: 'ct-2', firstName: 'John', lastName: 'Smith', email: 'john@globex.com', title: 'VP', company: { id: 'co-2', name: 'Globex Inc' }, createdAt: '2024-01-01T00:00:00Z' },
+          { id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com', title: 'CTO', company: { id: 'co-1', name: 'Acme Corp' }, createdAt: '2024-01-01T00:00:00Z' },
+          { id: 'ct-2', name: 'John Smith', email: 'john@globex.com', title: 'VP', company: { id: 'co-2', name: 'Globex Inc' }, createdAt: '2024-01-01T00:00:00Z' },
         ],
         total: 2,
       },
@@ -1466,7 +1464,7 @@ describe('zero_resolve_contacts', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', createdAt: '2024-01-01T00:00:00Z' },
+          { id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com', createdAt: '2024-01-01T00:00:00Z' },
         ],
         total: 1,
       },
@@ -1494,7 +1492,7 @@ describe('zero_resolve_contacts', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', createdAt: '2024-01-01T00:00:00Z' },
+          { id: 'ct-1', name: 'Jane Doe', createdAt: '2024-01-01T00:00:00Z' },
         ],
         total: 1,
       },
@@ -1533,7 +1531,7 @@ describe('zero_list_calendar_events — include contacts (fallback)', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
+          { id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com', title: 'CTO' },
         ],
       },
     });
@@ -1575,8 +1573,8 @@ describe('zero_list_calendar_events — include contacts (fallback)', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Alice', lastName: 'B', email: 'alice@co.com', title: 'CEO' },
-          { id: 'ct-2', firstName: 'Bob', lastName: 'C', email: 'bob@co.com', title: 'CTO' },
+          { id: 'ct-1', name: 'Alice B', email: 'alice@co.com', title: 'CEO' },
+          { id: 'ct-2', name: 'Bob C', email: 'bob@co.com', title: 'CTO' },
         ],
       },
     });
@@ -1612,7 +1610,7 @@ describe('zero_list_calendar_events — include contacts (fallback)', () => {
             contactIds: ['ct-1'], companyIds: [],
             createdAt: '2024-06-15T00:00:00Z', updatedAt: '2024-06-15T00:00:00Z',
             contacts: [
-              { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
+              { id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com', title: 'CTO' },
             ],
           },
         ],
@@ -1632,7 +1630,7 @@ describe('zero_list_calendar_events — include contacts (fallback)', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
     const callParams = mockGet.mock.calls[0][1].params;
     expect(callParams.fields).toContain('contacts.id');
-    expect(callParams.fields).toContain('contacts.firstName');
+    expect(callParams.fields).toContain('contacts.name');
     expect(text).toContain('Contacts (1)');
     expect(text).toContain('Jane Doe');
   });
@@ -1713,7 +1711,7 @@ describe('zero_get_contact — response unwrapping', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: {
-          id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com',
+          id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com',
           title: 'CTO', linkedin: 'https://linkedin.com/in/janedoe',
           company: { id: 'co-1', name: 'Acme Corp' },
           createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-06-01T00:00:00Z',
@@ -1734,7 +1732,7 @@ describe('zero_get_contact — response unwrapping', () => {
   it('handles unwrapped response (contact directly)', async () => {
     mockGet.mockResolvedValueOnce({
       data: {
-        id: 'ct-2', firstName: 'John', lastName: 'Smith', email: 'john@corp.com',
+        id: 'ct-2', name: 'John Smith', email: 'john@corp.com',
         createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-06-01T00:00:00Z',
       },
     });
@@ -1893,8 +1891,8 @@ describe('formatIncludedRelations — email-only contacts', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Jane', lastName: 'Doe', email: 'jane@acme.com', title: 'CTO' },
-          { id: 'ct-2', firstName: '', lastName: '', email: 'external@partner.com', title: '' },
+          { id: 'ct-1', name: 'Jane Doe', email: 'jane@acme.com', title: 'CTO' },
+          { id: 'ct-2', name: '', email: 'external@partner.com', title: '' },
         ],
       },
     });
@@ -2029,9 +2027,9 @@ describe('zero_list_calendar_events — unique contacts summary', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Alice', lastName: 'A', email: 'alice@co.com', title: 'CEO' },
-          { id: 'ct-2', firstName: 'Bob', lastName: 'B', email: 'bob@co.com', title: 'CTO' },
-          { id: 'ct-3', firstName: '', lastName: '', email: 'ext@partner.com', title: '' },
+          { id: 'ct-1', name: 'Alice A', email: 'alice@co.com', title: 'CEO' },
+          { id: 'ct-2', name: 'Bob B', email: 'bob@co.com', title: 'CTO' },
+          { id: 'ct-3', name: '', email: 'ext@partner.com', title: '' },
         ],
       },
     });
@@ -2067,7 +2065,7 @@ describe('zero_list_calendar_events — unique contacts summary', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Alice', lastName: 'A', email: 'alice@co.com', title: 'CEO' },
+          { id: 'ct-1', name: 'Alice A', email: 'alice@co.com', title: 'CEO' },
         ],
       },
     });
@@ -2110,9 +2108,9 @@ describe('zero_list_calendar_events — unique contacts summary', () => {
     mockGet.mockResolvedValueOnce({
       data: {
         data: [
-          { id: 'ct-1', firstName: 'Alice', lastName: 'A', email: 'alice@co.com', title: 'CEO' },
-          { id: 'ct-2', firstName: 'Bob', lastName: 'B', email: 'bob@co.com', title: '' },
-          { id: 'ct-3', firstName: 'Carol', lastName: 'C', email: 'carol@co.com', title: 'VP' },
+          { id: 'ct-1', name: 'Alice A', email: 'alice@co.com', title: 'CEO' },
+          { id: 'ct-2', name: 'Bob B', email: 'bob@co.com', title: '' },
+          { id: 'ct-3', name: 'Carol C', email: 'carol@co.com', title: 'VP' },
         ],
       },
     });
@@ -2133,6 +2131,79 @@ describe('zero_list_calendar_events — unique contacts summary', () => {
     expect(text).toContain('Alice A');
     expect(text).toContain('Bob B');
     expect(text).toContain('Carol C');
+  });
+});
+
+// ─── 46. List columns (custom properties) ─────────────────────────────────────
+
+describe('zero_list_columns', () => {
+  it('lists custom property definitions', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'col-1', name: 'Industry', key: 'industry', type: 'select', entity: 'company', options: [{ label: 'Tech' }, { label: 'Finance' }], createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+          { id: 'col-2', name: 'Revenue', key: 'revenue', type: 'number', entity: 'company', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 2,
+        limit: 100,
+        offset: 0,
+      },
+    });
+
+    const result = await columnTools.zero_list_columns.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Columns (2 of 2)');
+    expect(text).toContain('Industry');
+    expect(text).toContain('col-1');
+    expect(text).toContain('select');
+    expect(text).toContain('company');
+    expect(text).toContain('Revenue');
+    expect(text).toContain('number');
+    expect(result).not.toHaveProperty('isError');
+
+    expect(mockGet).toHaveBeenCalledWith('/api/columns', expect.objectContaining({
+      params: expect.objectContaining({ workspaceId: WORKSPACE_ID }),
+    }));
+  });
+
+  it('filters by entity type', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'col-3', name: 'Lead Source', key: 'lead_source', type: 'select', entity: 'contact', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+        ],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      },
+    });
+
+    const where = { entity: 'contact' };
+    const result = await columnTools.zero_list_columns.handler({ where });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Lead Source');
+    expect(text).toContain('contact');
+
+    const callParams = mockGet.mock.calls[0][1].params;
+    expect(callParams.where).toBe(JSON.stringify(where));
+  });
+
+  it('returns empty message when no columns found', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [],
+        total: 0,
+        limit: 100,
+        offset: 0,
+      },
+    });
+
+    const result = await columnTools.zero_list_columns.handler({});
+    const text = result.content[0].text;
+
+    expect(text).toBe('No columns found matching your criteria.');
   });
 });
 

@@ -179,11 +179,9 @@ export const activeDealTools = {
           return location ? `${enriched.name} (${location})` : enriched.name;
         };
 
-        const formatConfidence = (confidence: string | undefined) => {
-          if (!confidence) return 'N/A';
-          const parsed = parseFloat(confidence);
-          if (isNaN(parsed)) return 'N/A';
-          return `${Math.round(parsed * 100)}%`;
+        const formatConfidence = (confidence: number | undefined) => {
+          if (confidence == null) return 'N/A';
+          return `${Math.round(confidence * 100)}%`;
         };
 
         const formatSummary = (summary: ActivitySummary) => {
